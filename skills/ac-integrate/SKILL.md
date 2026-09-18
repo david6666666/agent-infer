@@ -84,7 +84,7 @@ Do NOT invoke for: adding a cache backend (use `ac-bootstrap`), benchmarking
        AgentCacheIdentityMiddleware,
        AgentCacheLifecycleMiddleware,
    )
-   from agentinfer.agentcache.core.factory import build_progress_ttl_controller
+    from agentinfer.agentcache.core.controller import build_progress_ttl_controller
    from agentinfer.agentcache.core.scheduler import AgentCacheAsyncSchedulerBridge
 
    print(AgentCacheAsyncSchedulerBridge)

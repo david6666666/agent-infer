@@ -7,7 +7,7 @@ owners:
 primary_code_paths:
   - agentinfer/agentcache/core/scheduler.py
   - agentinfer/agentcache/core/api_adapter.py
-  - agentinfer/agentcache/core/factory.py
+  - agentinfer/agentcache/core/controller.py
   - agentinfer/agentcache/core/request_queue.py
   - agentinfer/agentcache/core/vllm_logging.py
 related_code_paths:
@@ -337,7 +337,7 @@ See [Core tuning parameters](progress_ttl_scheduling.md#core-tuning-parameters) 
 | `force_resume_timeout_min_seconds` / `force_resume_timeout_max_seconds` | `30` / `300` | Bounds the adaptive force-resume timeout; an incomplete throughput window uses the maximum. |
 | `paused_program_ttl_seconds` | `1800` | Releases a stale paused Program after this duration. |
 
-`decode_buffer_tokens` is fixed at 100 by the vLLM factory and is not an operator setting. Unknown fields, removed
+`decode_buffer_tokens` is fixed at 100 by the controller constructor and is not an operator setting. Unknown fields, removed
 fields, and implementation-fixed values are rejected instead of being silently ignored.
 
 ### Configuration migration

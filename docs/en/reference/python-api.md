@@ -64,7 +64,7 @@ sent to the scheduler through the configured local Unix socket.
 ## Controller Construction
 
 Import path:
-`agentinfer.agentcache.core.factory.build_progress_ttl_controller`
+`agentinfer.agentcache.core.controller.build_progress_ttl_controller`
 
 ```python
 def build_progress_ttl_controller(

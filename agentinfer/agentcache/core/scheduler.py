@@ -21,7 +21,7 @@ from vllm.v1.engine import EngineCoreEventType
 from vllm.v1.request import Request, RequestStatus
 
 from agentinfer.agentcache.core.api_adapter import LIFECYCLE_SOCKET_ENV, UnixLifecycleReceiver
-from agentinfer.agentcache.core.factory import build_progress_ttl_controller
+from agentinfer.agentcache.core.controller import build_progress_ttl_controller
 from agentinfer.agentcache.core.vllm_logging import attach_agentinfer_to_vllm_logging
 from agentinfer.scheduling.backend import BackendInfo, BackendPoolInfo, DispatchTarget, DpRankInfo
 from agentinfer.scheduling.identity import AgentIdentity, JsonMapping, JsonObject, parse_agent_identity

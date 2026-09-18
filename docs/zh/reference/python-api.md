@@ -61,7 +61,7 @@ socket 发送给调度器。
 ## 控制器构建
 
 导入路径：
-`agentinfer.agentcache.core.factory.build_progress_ttl_controller`
+`agentinfer.agentcache.core.controller.build_progress_ttl_controller`
 
 ```python
 def build_progress_ttl_controller(
