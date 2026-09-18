@@ -216,7 +216,8 @@ def _print_transparency(
         merged = injected[ADDITIONAL_CONFIG_DEST]
         agentcache = merged.get("agentcache", {}) if isinstance(merged, dict) else {}
         shown = {key: agentcache[key] for key in ("lifecycle_socket_path",) if key in agentcache}
-        parts.append(f"--additional-config.agentcache {json.dumps(shown, sort_keys=True)}")
+        if shown:
+            parts.append(f"--additional-config.agentcache {json.dumps(shown, sort_keys=True)}")
     print(f"[agentinfer] --agentinfer injected: {' '.join(parts)}", file=sys.stderr)
     if socket_defaulted:
         source = " (from --additional-config agentcache.lifecycle_socket_path)" if socket_from_config else ""

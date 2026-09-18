@@ -247,6 +247,26 @@ def test_lifecycle_socket_env_and_config_conflict_is_rejected(monkeypatch: pytes
         serve_profile.run_agentinfer_serve(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
 
 
+def test_transparency_line_omits_empty_agentcache_fragment(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _install_stub_vllm(monkeypatch)
+    monkeypatch.delenv(serve_profile.LIFECYCLE_SOCKET_ENV, raising=False)
+
+    serve_profile.run_agentinfer_serve(["MODEL", "--agentinfer"])
+
+    err = capsys.readouterr().err
+    assert "[agentinfer] --agentinfer injected:" in err
+    assert "--additional-config.agentcache" not in err
+
+    user_config = {"agentcache": {"lifecycle_socket_path": "/tmp/config-driven.sock"}}
+    monkeypatch.setenv(serve_profile.LIFECYCLE_SOCKET_ENV, "/tmp/config-driven.sock")
+    serve_profile.run_agentinfer_serve(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
+
+    err = capsys.readouterr().err
+    assert '--additional-config.agentcache {"lifecycle_socket_path": "/tmp/config-driven.sock"}' in err
+
+
 def test_empty_lifecycle_socket_env_is_treated_as_unset(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
