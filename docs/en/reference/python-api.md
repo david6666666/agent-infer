@@ -21,9 +21,8 @@ Transfers requests, outputs, cancellations, and Prefix Cache observations betwee
 AgentInfer admission controller. Configuration requirements:
 
 - vLLM must set `async_scheduling=true`; otherwise the constructor raises `ValueError`.
-- `additional_config.agentcache.controller_factory` is an optional `module.attribute` import path.
-- With a controller configured, lifecycle events can use `lifecycle_socket_path` or
-  `AGENTCACHE_VLLM_LIFECYCLE_SOCKET`.
+- The bridge builds the embedded Progress-TTL controller directly from `additional_config.agentcache`.
+- Lifecycle events can use `lifecycle_socket_path` or `AGENTCACHE_VLLM_LIFECYCLE_SOCKET`.
 
 ### `AgentCacheSyncSchedulerBridge`
 
@@ -62,7 +61,7 @@ Observes response lifecycle after vLLM tool parsing without rewriting ASGI respo
 `AGENTCACHE_VLLM_LIFECYCLE_SOCKET` and raises `RuntimeError` when the variable is absent. Lifecycle observations are
 sent to the scheduler through the configured local Unix socket.
 
-## Controller Factory
+## Controller Construction
 
 Import path:
 `agentinfer.agentcache.core.factory.build_progress_ttl_controller`
@@ -74,23 +73,9 @@ def build_progress_ttl_controller(
 ) -> ProgramScheduler[Request, ProgressTTLGlobalFactors, ProgressTTLProgramFactors]: ...
 ```
 
-Builds the embedded Progress-TTL scheduler used by the agent-aware schedulers. `settings` is the
+Constructs the embedded Progress-TTL scheduler used directly by the agent-aware schedulers. `settings` is the
 `additional_config.agentcache` mapping; policy values are read from its nested `progress_ttl` object. Fixed, removed,
 or unknown Progress-TTL fields raise `ValueError`.
-
-## Compatibility Interfaces
-
-The following APIs remain available for compatibility but do not enable the explicit Progress-TTL serving path:
-
-| Interface | Import path | Behavior |
-| --- | --- | --- |
-| `AGENT_AWARE_SCHEDULER` | `agentinfer.AGENT_AWARE_SCHEDULER` | Dotted path for `AgentAwareScheduler`. |
-| `LLM` | `agentinfer.LLM` | Thin `vllm.LLM` subclass with unchanged upstream signatures. |
-| `AgentAwareScheduler` | `agentinfer.agentcache.core.scheduler.AgentAwareScheduler` | Replaces native waiting with `AgentAwareQueue`. |
-| `AgentAwareQueue` | `agentinfer.agentcache.core.request_queue.AgentAwareQueue` | FCFS-compatible queue extension point. |
-
-Importing `agentinfer` patches vLLM `EngineArgs` once. It selects `AgentAwareScheduler` only when `scheduler_cls` is
-unset and preserves any explicit scheduler. Without vLLM, `agentinfer` remains importable but does not export `LLM`.
 
 See [Integrate with vLLM](../how-to/integrate-vllm.md) for deployment steps and
 [Architecture](../explanation/architecture.md) for component interactions.

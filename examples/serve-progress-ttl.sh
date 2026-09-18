@@ -9,7 +9,5 @@ export AGENTCACHE_VLLM_LIFECYCLE_SOCKET=${AGENTCACHE_VLLM_LIFECYCLE_SOCKET:-/tmp
 #     --async-scheduling \
 #     --scheduler-cls agentinfer.agentcache.core.scheduler.AgentCacheAsyncSchedulerBridge \
 #     --middleware agentinfer.agentcache.core.api_adapter.AgentCacheIdentityMiddleware \
-#     --middleware agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware \
-#     --additional-config \
-#     '{"agentcache":{"controller_factory":"agentinfer.agentcache.core.factory.build_progress_ttl_controller"}}'
+#     --middleware agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware
 exec vllm serve "$MODEL" --agentinfer

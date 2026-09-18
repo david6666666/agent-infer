@@ -2,7 +2,7 @@
 
 ## Purpose and boundary
 
-This design collapses the five-flag Progress-TTL serving incantation into one operator-facing flag on the existing
+This design collapses the four-flag Progress-TTL serving incantation into one operator-facing flag on the existing
 AgentInfer `vllm` console script. The canonical command becomes:
 
 ```bash
@@ -31,12 +31,10 @@ vllm serve MODEL \
   --async-scheduling \
   --scheduler-cls agentinfer.agentcache.core.scheduler.AgentCacheAsyncSchedulerBridge \
   --middleware agentinfer.agentcache.core.api_adapter.AgentCacheIdentityMiddleware \
-  --middleware agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware \
-  --additional-config \
-  '{"agentcache":{"controller_factory":"agentinfer.agentcache.core.factory.build_progress_ttl_controller"}}'
+  --middleware agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware
 ```
 
-The flags are verbose, easy to misspell as class paths, and embed JSON on the command line. All current deployments want
+The flags are verbose and easy to misspell as class paths. All current deployments want
 the same combination, so the combination itself becomes the default unit of configuration.
 
 ## Precedent: VLLM-Omni's `--omni` flag
@@ -120,9 +118,9 @@ sequenceDiagram
     `--additional-config` supplies one — the scheduler reads the config key first while the middleware reads only the
     environment, so the two must agree. An environment value that conflicts with a config value is rejected.
 6. **Transparency.** The shim prints one `[agentinfer]`-prefixed line to stderr with the profile and the injected
-    values, so deployment logs always contain the reproducible effective configuration. The line reports only the
-    injected `agentcache` keys (`controller_factory`, `lifecycle_socket_path`); arbitrary user `--additional-config`
-    values are never serialized because they may contain secrets.
+     values, so deployment logs always contain the reproducible effective configuration. The line reports only the
+     injected `agentcache` keys (`lifecycle_socket_path`); arbitrary user `--additional-config`
+     values are never serialized because they may contain secrets.
 7. **Dispatch.** The enriched namespace is passed to the same upstream serve entrypoint the upstream CLI itself
    dispatches for `serve`. The AgentInfer flags are shim arguments and are not forwarded.
 
@@ -138,8 +136,8 @@ already exists today and is unchanged by this design:
 - **API middleware chain.** Any user-supplied middleware runs first, then `AgentCacheIdentityMiddleware` normalizes
   framework headers, `agent_hint`, and Anthropic Messages identity into `vllm_xargs.agentic_context`, then
   `AgentCacheLifecycleMiddleware` reports terminal `CONTINUE`/`TERMINAL` facts over the configured Unix datagram socket.
-- **Program policy.** EngineCore reads `additional_config.agentcache.controller_factory` and builds the Progress-TTL
-  controller (default `mode: on`), which retains and resumes agent Programs around tool calls.
+- **Program policy.** EngineCore builds the Progress-TTL controller directly from `additional_config.agentcache`
+  (default `mode: on`), which retains and resumes agent Programs around tool calls.
 - **Pass-through traffic.** Requests without a recognized Program identity bypass RequestPool entirely and follow
   native vLLM admission, so the server remains a fully compatible OpenAI-style endpoint.
 
@@ -157,9 +155,7 @@ vllm serve MODEL \
   --async-scheduling \
   --scheduler-cls agentinfer.agentcache.core.scheduler.AgentCacheAsyncSchedulerBridge \
   --middleware agentinfer.agentcache.core.api_adapter.AgentCacheIdentityMiddleware \
-  --middleware agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware \
-  --additional-config \
-  '{"agentcache":{"controller_factory":"agentinfer.agentcache.core.factory.build_progress_ttl_controller"}}'
+  --middleware agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware
 ```
 
 | Dimension | Default under `--agentinfer` | How to deviate |
@@ -167,13 +163,13 @@ vllm serve MODEL \
 | Scheduling mode | Async scheduling pinned (explicit `--async-scheduling`), because vLLM 0.23.0 may auto-enable async scheduling when the option is unset and the bridge must match the engine mode. | Pass `--no-async-scheduling`; the shim then selects the sync bridge instead. |
 | Scheduler class | `AgentCacheAsyncSchedulerBridge` on the async path, `AgentCacheSyncSchedulerBridge` under `--no-async-scheduling`; admission wrapper only, native token scheduling preserved. | Explicit `--scheduler-cls` is an error; use the long form for another class. |
 | API middleware | Identity and lifecycle middleware appended after any user middleware. | Add more via repeatable `--middleware`; omit ours via the long form. |
-| Program policy | Progress-TTL controller, policy `mode: on`, documented Progress-TTL defaults. | Override policy keys through `--additional-config` JSON merge; a different `controller_factory` is an error. |
+| Program policy | Progress-TTL controller, policy `mode: on`, documented Progress-TTL defaults. | Override policy keys through `--additional-config` JSON merge. |
 | Lifecycle socket | `/tmp/agentinfer-vllm-lifecycle.sock` when the environment variable is unset. | Export a distinct `AGENTCACHE_VLLM_LIFECYCLE_SOCKET` per server instance on one host. |
 | Observability | Off (`agentcache.observability.enabled` defaults to `false`). | Enable through `--additional-config` JSON merge. |
 | Prefix caching | Not forced. | Pass `--enable-prefix-caching` yourself; recommended so Progress-TTL observes reusable prefixes. |
 | All other vLLM options | Pass through untouched (model, port, parallelism, tool parser, quantization, ...). | Standard vLLM syntax; `vllm serve MODEL --agentinfer --help` shows them plus the `AgentInferConfig` group. |
 
-Not provided by the flag at all: serving without the lifecycle middleware, custom controller factory wiring, and
+Not provided by the flag at all: serving without the lifecycle middleware and
 `python -m vllm` (upstream parses `sys.argv` directly; omni has the same limitation). These remain long-form-only.
 
 ## Command surface
@@ -224,10 +220,10 @@ DEFAULT_SERVE_PROFILE = ServeProfile(...)  # the Progress-TTL serving path
 ```
 
 The bare `--agentinfer` flag always resolves to `DEFAULT_SERVE_PROFILE`: both bridge variants
-(`AgentCacheAsyncSchedulerBridge` and `AgentCacheSyncSchedulerBridge`), both middleware entries, and the Progress-TTL
-controller factory; the bridge actually injected follows the scheduling mode (see the injection rules). If a selection
-mechanism is ever needed, named profiles can be added as registry entries behind a future flag; none exists in this
-design.
+(`AgentCacheAsyncSchedulerBridge` and `AgentCacheSyncSchedulerBridge`), both middleware entries, and the embedded
+Progress-TTL controller; the bridge actually injected follows the scheduling mode (see the injection rules). If a
+selection mechanism is ever needed, named profiles can be added as registry entries behind a future flag; none exists in
+this design.
 
 Injection logic is pure with respect to the namespace: it reads explicit keys, raises `AgentInferServeError` on
 conflicts, and writes the merged values. The module imports `make_arg_parser` and the serve dispatch entry lazily from
@@ -243,7 +239,7 @@ conflicts, and writes the merged values. The module imports `make_arg_parser` an
 | `--no-async-scheduling` | Keep the user's choice; set `scheduler_cls` to `AgentCacheSyncSchedulerBridge`. |
 | `--scheduler-cls X` | Usage error, exit code 2. Ambiguous intent; the message says to remove `--scheduler-cls` or drop `--agentinfer`. Explicit selection is never silently overridden. |
 | `--middleware X` (any count) | Append our middleware after the user's entries; identical class paths are deduplicated. |
-| `--additional-config '{...}'` | Recursive JSON merge into one `additional_config` value: object keys merge recursively, non-object conflicts resolve in the user's favor. A user-supplied `agentcache.controller_factory` that differs from the profile's is a usage error, exit code 2. Invalid JSON is a usage error naming the offending fragment. |
+| `--additional-config '{...}'` | Recursive JSON merge into one `additional_config` value: object keys merge recursively, non-object conflicts resolve in the user's favor. Invalid JSON is a usage error naming the offending fragment. |
 | `AGENTCACHE_VLLM_LIFECYCLE_SOCKET` unset | `os.environ.setdefault("AGENTCACHE_VLLM_LIFECYCLE_SOCKET", "/tmp/agentinfer-vllm-lifecycle.sock")` before dispatch, because the lifecycle middleware refuses to start without it. |
 
 When the scheduling mode is left unset, the shim pins async scheduling explicitly rather than leaving it to vLLM's
@@ -259,12 +255,10 @@ the flag; the documented socket-ownership rules in the how-to guide apply unchan
 
 ## Interaction with existing behavior
 
-- **EngineArgs patch (`agentinfer/__init__.py`)**: the patch defaults `scheduler_cls` only when it is `None`. Injection
-  always sets an explicit `scheduler_cls`, so the patch observes an explicit value and leaves it untouched.
-- **Bare delegation**: serves without `--agentinfer` are delegated byte-for-byte unchanged, preserving AgentInfer 0.1.0
-  behavior including the default `AgentAwareScheduler` patch.
-- **Long form**: the explicit five-flag command keeps working forever; it remains the configuration documented for
-  advanced control (no lifecycle middleware, custom controller factory wiring) and stays the source of truth in e2e
+- **Bare delegation**: serves without `--agentinfer` are delegated byte-for-byte unchanged to upstream vLLM, which
+  owns the default scheduler selection.
+- **Long form**: the explicit long-form command keeps working forever; it remains the configuration documented for
+  advanced control (no lifecycle middleware) and stays the source of truth in e2e
   comparison scripts such as `tests/agentbench/run-scheduler-e2e-compare.sh`, avoiding drift between the wrapper and
   measured baselines.
 
@@ -285,14 +279,12 @@ the flag; the documented socket-ownership rules in the how-to guide apply unchan
 - **CLI-INV-008:** The injected agent-aware scheduler always matches the effective scheduling mode; an explicit
   `--async-scheduling`/`--no-async-scheduling` choice is preserved, and only an unset mode receives the documented
   async default.
-- **CLI-INV-009:** A present `agentcache.controller_factory` that differs from the profile value — including JSON
-  `null` — is rejected instead of silently disabling the Progress-TTL controller.
-- **CLI-INV-010:** The lifecycle socket environment exported for the middleware always equals the path the scheduler
+- **CLI-INV-009:** The lifecycle socket environment exported for the middleware always equals the path the scheduler
   will use: a config `agentcache.lifecycle_socket_path` wins the default, and an environment value conflicting with
   the config value is rejected.
-- **CLI-INV-011:** The transparency line never serializes arbitrary user `--additional-config` values; it reports only
+- **CLI-INV-010:** The transparency line never serializes arbitrary user `--additional-config` values; it reports only
   the injected `agentcache` keys.
-- **CLI-INV-012:** The takeover applies the upstream CLI environment setup (`cli_env_setup()`) before parsing, so a
+- **CLI-INV-011:** The takeover applies the upstream CLI environment setup (`cli_env_setup()`) before parsing, so a
   takeover launch matches the environment behavior of the upstream `vllm` CLI it replaces.
 
 ## Planned changes

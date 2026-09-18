@@ -73,7 +73,6 @@ vllm serve MODEL \
   --enable-prompt-tokens-details \
   --additional-config '{
     "agentcache": {
-      "controller_factory": "agentinfer.agentcache.core.factory.build_progress_ttl_controller",
       "progress_ttl": {
         "mode": "on"
       },
@@ -110,9 +109,8 @@ The command-line options added for this integration have distinct responsibiliti
 | `--additional-config` | Supplies the `agentcache` adapter, policy, and observability namespaces. |
 | `AGENTCACHE_VLLM_LIFECYCLE_SOCKET` | Selects the API-side Unix datagram base path; the receiver uses a `.dpN` suffix. It is needed only with lifecycle middleware. |
 
-Do not select legacy `agentinfer.agentcache.core.scheduler.AgentAwareScheduler` for this configuration. It replaces
-vLLM's waiting queue and is not the Progress-TTL integration path. A native comparison whose environment imports
-AgentInfer should explicitly select `vllm.v1.core.sched.async_scheduler.AsyncScheduler`.
+A native comparison whose environment imports AgentInfer should explicitly select
+`vllm.v1.core.sched.async_scheduler.AsyncScheduler`.
 
 ## Architecture
 
@@ -290,7 +288,6 @@ All integration settings are under `additional_config.agentcache`.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `controller_factory` | unset | Enables Program scheduling by importing an explicit controller factory. Without it, the bridge is native pass-through. |
 | `backend_id` | `vllm-local` | Names the local backend in dispatch results. |
 | `lifecycle_socket_path` | environment value | Overrides the EngineCore receiver's lifecycle socket base path. The API middleware still reads `AGENTCACHE_VLLM_LIFECYCLE_SOCKET`. |
 | `schedule_interval_seconds` | `1.0` | Minimum interval between ordinary Program scheduling cycles; due TTL deadlines can trigger an earlier cycle. |
@@ -376,8 +373,7 @@ options.
 - **VI-INV-002:** Native vLLM scheduling, KV allocation, output update, and finish logic run in their original order.
 - **VI-INV-003:** A non-due AgentInfer check does not construct Program views or sort Programs on the vLLM schedule hot
   path.
-- **VI-INV-004:** Requests without Program identity and deployments without a controller factory preserve native
-  pass-through behavior.
+- **VI-INV-004:** Requests without Program identity preserve native pass-through behavior.
 - **VI-INV-005:** API lifecycle delivery is optional, non-blocking, and cannot fail the served request.
 - **VI-INV-006:** DP-rank identity comes from EngineCore parallel configuration; TP size and obsolete `num_ranks`
   configuration do not participate.

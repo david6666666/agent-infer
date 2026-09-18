@@ -61,8 +61,7 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct --agentinfer
 仓库中的等效示例位于 [`examples/serve-progress-ttl.sh`](examples/serve-progress-ttl.sh)。
 
 安装后的 `vllm` 命令会将普通命令委托给上游 vLLM。显式的 `vllm bench serve --agentinfer` 命令进入
-AgentBench；`vllm serve MODEL --agentinfer` 激活 AgentInfer 服务路径；其他命令在未显式设置 `--scheduler-cls`
-时使用 AgentInfer 的默认调度器。标准服务参数见
+AgentBench；`vllm serve MODEL --agentinfer` 激活 AgentInfer 服务路径；其他命令原样委托给上游。标准服务参数见
 [vLLM Quickstart](https://docs.vllm.ai/en/latest/getting_started/quickstart/)。
 
 ## License
