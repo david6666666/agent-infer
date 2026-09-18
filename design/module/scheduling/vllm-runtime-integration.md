@@ -57,7 +57,9 @@ source /path/to/vllm/.venv/bin/activate
 python -m pip install -e /path/to/AgentInfer
 ```
 
-The recommended async configuration is:
+The recommended single-flag configuration is `vllm serve MODEL --agentinfer`; the shim injects the explicit flags
+below and follows the `--async-scheduling`/`--no-async-scheduling` choice when selecting the bridge. The design
+contract for the flag is [AgentInfer serve flag](agentinfer-serve-flag.md). The explicit async configuration is:
 
 ```bash
 export AGENTCACHE_VLLM_LIFECYCLE_SOCKET=/tmp/agentinfer-vllm-lifecycle.sock
@@ -120,7 +122,7 @@ flowchart TB
     IM[AgentInfer identity middleware]
     LM[AgentInfer lifecycle middleware]
     EC[vLLM EngineCore DP rank]
-    BR[AgentInfer scheduler bridge]
+    BR[AgentInfer agent-aware scheduler]
     PS[Program state machine and Progress-TTL]
     NS[vLLM native Scheduler]
 
