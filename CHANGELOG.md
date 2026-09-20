@@ -19,8 +19,12 @@ a versioned section.
 
 ### Changed
 
-- The scheduler bridge now constructs the embedded Progress-TTL controller directly from
-  `additional_config.agentcache`; the controller-factory import-path setting was removed.
+- Inferact replay counts complete conversations with the configured chat template and its parameters, using a
+ validated local tokenizer when available. Current-turn calibration preserves historical messages and requires exact
+ input lengths; clipping checks prefixes from longest to shortest to handle nonmonotone token counts.
+- Converted Trace IR manifests identify the converter by name without a separate converter version label.
+- Inferact rejects nonzero calibration tolerance instead of silently normalizing it. Local incremental counting is
+ limited to probed message counts, and tokenizer discovery errors close the HTTP client before propagating.
 - Reorganized the root README into project overview, core features, related documentation, requirements, installation,
   Quick Start, and license sections.
 
