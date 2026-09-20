@@ -63,15 +63,11 @@ socket through `additional_config.agentcache.lifecycle_socket_path` or `AGENTCAC
 This boundary prevents the HTTP layer from mutating scheduler objects directly and lets multi-process vLLM
 deployments consume events for the matching data-parallel rank.
 
-## CLI Delegation and Compatibility
+## CLI Delegation
 
 AgentInfer installs a `vllm` console script. Explicit `vllm bench serve --agentinfer` commands enter AgentBench; other
-commands delegate unchanged to upstream vLLM. Importing the AgentInfer package patches `EngineArgs` once, so an unset
-`scheduler_cls` defaults to the legacy `AgentAwareScheduler`, while an explicit scheduler is preserved.
-
-`AgentAwareScheduler`, `AgentAwareQueue`, and `agentinfer.LLM` remain FCFS-compatible extension surfaces. They do not
-enable the Progress-TTL controller. Current deployments should explicitly configure the appropriate agent-aware
-scheduler, middleware, and controller factory.
+commands delegate unchanged to upstream vLLM. Deployments enable agent-aware scheduling explicitly through
+`vllm serve MODEL --agentinfer` or the long-form scheduler and middleware options.
 
 ## Benchmark Subsystem
 

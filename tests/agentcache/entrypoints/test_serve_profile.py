@@ -91,7 +91,7 @@ def test_bare_flag_pins_async_and_async_bridge(monkeypatch: pytest.MonkeyPatch) 
     assert namespace.async_scheduling is True
     assert namespace.scheduler_cls == serve_profile.ASYNC_SCHEDULER_CLS
     assert namespace.middleware == list(serve_profile.DEFAULT_SERVE_PROFILE.middlewares)
-    assert namespace.additional_config == {"agentcache": {"controller_factory": serve_profile.CONTROLLER_FACTORY}}
+    assert namespace.additional_config == {"agentcache": {}}
     assert injected["async_scheduling"] is True
 
 
@@ -152,38 +152,14 @@ def test_user_additional_config_merges_with_user_priority() -> None:
 
     assert namespace.additional_config == {
         "other": {"flag": True},
-        "agentcache": {
-            "controller_factory": serve_profile.CONTROLLER_FACTORY,
-            "observability": {"enabled": True},
-        },
+        "agentcache": {"observability": {"enabled": True}},
     }
-
-
-def test_conflicting_controller_factory_is_rejected() -> None:
-    user_config = {"agentcache": {"controller_factory": "custom.factory"}}
-    namespace, explicit = _parse(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
-    with pytest.raises(serve_profile.AgentInferServeError, match="controller_factory"):
-        serve_profile.inject_profile(namespace, explicit)
-
-
-def test_null_controller_factory_is_rejected() -> None:
-    user_config = {"agentcache": {"controller_factory": None}}
-    namespace, explicit = _parse(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
-    with pytest.raises(serve_profile.AgentInferServeError, match="controller_factory"):
-        serve_profile.inject_profile(namespace, explicit)
 
 
 def test_non_object_agentcache_is_rejected() -> None:
     namespace, explicit = _parse(["MODEL", "--agentinfer", "--additional-config", '{"agentcache": "on"}'])
     with pytest.raises(serve_profile.AgentInferServeError, match="agentcache must be a JSON object"):
         serve_profile.inject_profile(namespace, explicit)
-
-
-def test_identical_controller_factory_is_accepted() -> None:
-    user_config = {"agentcache": {"controller_factory": serve_profile.CONTROLLER_FACTORY}}
-    namespace, explicit = _parse(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
-    serve_profile.inject_profile(namespace, explicit)
-    assert namespace.additional_config["agentcache"]["controller_factory"] == (serve_profile.CONTROLLER_FACTORY)
 
 
 def test_invalid_additional_config_json_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -213,7 +189,7 @@ def test_run_agentinfer_serve_dispatches_enriched_namespace(
     assert served.scheduler_cls == serve_profile.ASYNC_SCHEDULER_CLS
     assert served.async_scheduling is True
     assert served.middleware == ["custom.Mid", *serve_profile.DEFAULT_SERVE_PROFILE.middlewares]
-    assert served.additional_config == {"agentcache": {"controller_factory": serve_profile.CONTROLLER_FACTORY}}
+    assert served.additional_config == {"agentcache": {}}
     assert os.environ[serve_profile.LIFECYCLE_SOCKET_ENV] == serve_profile.DEFAULT_LIFECYCLE_SOCKET
     err = capsys.readouterr().err
     assert "[agentinfer] --agentinfer injected:" in err
@@ -271,6 +247,26 @@ def test_lifecycle_socket_env_and_config_conflict_is_rejected(monkeypatch: pytes
         serve_profile.run_agentinfer_serve(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
 
 
+def test_transparency_line_omits_empty_agentcache_fragment(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _install_stub_vllm(monkeypatch)
+    monkeypatch.delenv(serve_profile.LIFECYCLE_SOCKET_ENV, raising=False)
+
+    serve_profile.run_agentinfer_serve(["MODEL", "--agentinfer"])
+
+    err = capsys.readouterr().err
+    assert "[agentinfer] --agentinfer injected:" in err
+    assert "--additional-config.agentcache" not in err
+
+    user_config = {"agentcache": {"lifecycle_socket_path": "/tmp/config-driven.sock"}}
+    monkeypatch.setenv(serve_profile.LIFECYCLE_SOCKET_ENV, "/tmp/config-driven.sock")
+    serve_profile.run_agentinfer_serve(["MODEL", "--agentinfer", "--additional-config", json.dumps(user_config)])
+
+    err = capsys.readouterr().err
+    assert '--additional-config.agentcache {"lifecycle_socket_path": "/tmp/config-driven.sock"}' in err
+
+
 def test_empty_lifecycle_socket_env_is_treated_as_unset(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -310,4 +306,3 @@ def test_transparency_line_omits_user_config_secrets(
     err = capsys.readouterr().err
     assert "sk-super-secret" not in err
     assert "secret_backend" not in err
-    assert serve_profile.CONTROLLER_FACTORY in err

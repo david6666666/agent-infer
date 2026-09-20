@@ -60,14 +60,11 @@ receiver，并将事件交给控制器。socket 可以通过 `additional_config.
 
 该边界避免 HTTP 层直接修改调度器对象，也使多进程 vLLM 部署按数据并行 rank 消费对应事件。
 
-## CLI 委托与兼容路径
+## CLI 委托
 
 AgentInfer 会安装一个 `vllm` 控制台脚本。显式的 `vllm bench serve --agentinfer` 命令进入 AgentBench；其他
-命令原样委托给上游 vLLM。导入 AgentInfer 包时会修补一次 `EngineArgs`，因此未设置的 `scheduler_cls` 默认
-选择旧版 `AgentAwareScheduler`，显式调度器则保持不变。
-
-`AgentAwareScheduler`、`AgentAwareQueue` 和 `agentinfer.LLM` 仍作为兼容 FCFS 的扩展接口保留，但不会启用
-Progress-TTL 控制器。当前部署应显式配置相应 Agent 感知调度器、中间件和控制器工厂。
+命令原样委托给上游 vLLM。部署通过 `vllm serve MODEL --agentinfer` 或长格式的调度器与中间件选项显式启用
+Agent 感知调度。
 
 ## 基准子系统
 

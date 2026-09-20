@@ -62,7 +62,7 @@ The equivalent repository example is available at [`examples/serve-progress-ttl.
 
 The installed `vllm` command delegates ordinary commands to upstream vLLM. Explicit
 `vllm bench serve --agentinfer` commands enter AgentBench; `vllm serve MODEL --agentinfer` activates the
-AgentInfer serving path; other commands use AgentInfer's default scheduler unless `--scheduler-cls` is set explicitly.
+AgentInfer serving path; other commands are delegated unchanged.
 See the [vLLM Quickstart](https://docs.vllm.ai/en/latest/getting_started/quickstart/) for standard serving options.
 
 ## License
