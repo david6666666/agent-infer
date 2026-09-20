@@ -22,7 +22,6 @@ ASYNC_SCHEDULER_CLS = "agentinfer.agentcache.core.scheduler.AgentCacheAsyncSched
 SYNC_SCHEDULER_CLS = "agentinfer.agentcache.core.scheduler.AgentCacheSyncSchedulerBridge"
 IDENTITY_MIDDLEWARE = "agentinfer.agentcache.core.api_adapter.AgentCacheIdentityMiddleware"
 LIFECYCLE_MIDDLEWARE = "agentinfer.agentcache.core.api_adapter.AgentCacheLifecycleMiddleware"
-CONTROLLER_FACTORY = "agentinfer.agentcache.core.factory.build_progress_ttl_controller"
 
 LIFECYCLE_SOCKET_ENV = "AGENTCACHE_VLLM_LIFECYCLE_SOCKET"
 DEFAULT_LIFECYCLE_SOCKET = "/tmp/agentinfer-vllm-lifecycle.sock"
@@ -51,7 +50,7 @@ DEFAULT_SERVE_PROFILE = ServeProfile(
     async_scheduler_cls=ASYNC_SCHEDULER_CLS,
     sync_scheduler_cls=SYNC_SCHEDULER_CLS,
     middlewares=(IDENTITY_MIDDLEWARE, LIFECYCLE_MIDDLEWARE),
-    agentcache_config={"controller_factory": CONTROLLER_FACTORY},
+    agentcache_config={},
 )
 
 
@@ -68,7 +67,7 @@ def add_agentinfer_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         help="Enable the AgentInfer Progress-TTL serving path: injects the AgentCache scheduler bridge "
         "(async or sync, following --async-scheduling/--no-async-scheduling), the identity and lifecycle "
-        "middleware, and the Progress-TTL controller factory.",
+        "middleware, and the embedded Progress-TTL controller.",
     )
 
 
@@ -145,13 +144,6 @@ def _merge_additional_config(current: Any, profile: ServeProfile) -> dict[str, A
     user_agentcache = user_config.get("agentcache")
     if user_agentcache is not None and not isinstance(user_agentcache, dict):
         raise AgentInferServeError("--additional-config agentcache must be a JSON object when --agentinfer is set.")
-    if isinstance(user_agentcache, dict):
-        profile_factory = profile.agentcache_config.get("controller_factory")
-        if "controller_factory" in user_agentcache and user_agentcache["controller_factory"] != profile_factory:
-            raise AgentInferServeError(
-                "--agentinfer cannot be combined with a custom agentcache.controller_factory; "
-                "use the explicit long-form command documented in docs/en/how-to/integrate-vllm.md."
-            )
     merged = _deep_merge({"agentcache": dict(profile.agentcache_config)}, user_config)
     return merged
 
@@ -223,8 +215,9 @@ def _print_transparency(
     if ADDITIONAL_CONFIG_DEST in injected:
         merged = injected[ADDITIONAL_CONFIG_DEST]
         agentcache = merged.get("agentcache", {}) if isinstance(merged, dict) else {}
-        shown = {key: agentcache[key] for key in ("controller_factory", "lifecycle_socket_path") if key in agentcache}
-        parts.append(f"--additional-config.agentcache {json.dumps(shown, sort_keys=True)}")
+        shown = {key: agentcache[key] for key in ("lifecycle_socket_path",) if key in agentcache}
+        if shown:
+            parts.append(f"--additional-config.agentcache {json.dumps(shown, sort_keys=True)}")
     print(f"[agentinfer] --agentinfer injected: {' '.join(parts)}", file=sys.stderr)
     if socket_defaulted:
         source = " (from --additional-config agentcache.lifecycle_socket_path)" if socket_from_config else ""
