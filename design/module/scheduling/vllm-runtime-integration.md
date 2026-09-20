@@ -8,7 +8,6 @@ primary_code_paths:
   - agentinfer/agentcache/core/scheduler.py
   - agentinfer/agentcache/core/api_adapter.py
   - agentinfer/agentcache/core/controller.py
-  - agentinfer/agentcache/core/request_queue.py
   - agentinfer/agentcache/core/vllm_logging.py
 related_code_paths:
   - agentinfer/scheduling/**

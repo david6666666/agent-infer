@@ -86,6 +86,18 @@ def test_controller_uses_two_l20_reference_defaults_without_policy_overrides() -
     assert controller._observability.log_interval_seconds == 5
 
 
+def test_controller_ignores_stale_controller_factory_setting() -> None:
+    controller = build_progress_ttl_controller(
+        backend(),
+        {
+            "controller_factory": "agentinfer.agentcache.core.factory.build_progress_ttl_controller",
+            "progress_ttl": {"ttl_min_seconds": 5},
+        },
+    )
+
+    assert controller.strategy.config.ttl_min_seconds == 5
+
+
 def test_controller_accepts_explicit_progress_ttl_mode() -> None:
     controller = build_progress_ttl_controller(backend(), {"progress_ttl": {"mode": "auto"}})
 
