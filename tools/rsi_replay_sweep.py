@@ -150,12 +150,15 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
     try:
         os.killpg(process.pid, signal.SIGTERM)
         process.wait(timeout=90)
-    except (ProcessLookupError, subprocess.TimeoutExpired):
+    except (KeyboardInterrupt, ProcessLookupError, subprocess.TimeoutExpired):
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        process.wait(timeout=30)
+        try:
+            process.wait(timeout=30)
+        except (KeyboardInterrupt, subprocess.TimeoutExpired):
+            pass
 
 
 def write_config(
@@ -207,8 +210,23 @@ replay:
     path.write_text(text, encoding="utf-8")
 
 
-def run_replay(vllm: str, config: Path, log_path: Path, repo: Path) -> int:
-    command = [vllm, "bench", "serve", "--agentinfer", "replay", "--config", str(config)]
+def run_replay(python: str, config: Path, log_path: Path, repo: Path) -> int:
+    dispatcher = (
+        "import sys; "
+        "from agentinfer.agentcache.entrypoints.cli.main import main; "
+        "raise SystemExit(main(['vllm', *sys.argv[1:]]))"
+    )
+    command = [
+        python,
+        "-c",
+        dispatcher,
+        "bench",
+        "serve",
+        "--agentinfer",
+        "replay",
+        "--config",
+        str(config),
+    ]
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(repo) + os.pathsep + environment.get("PYTHONPATH", "")
     with log_path.open("w", encoding="utf-8") as log:
@@ -307,7 +325,8 @@ def make_record(
         },
         "commands": [
             "vllm serve Qwen/Qwen3.8-27B --tensor-parallel-size 4 ...",
-            f"vllm bench serve --agentinfer replay --config {config_path}",
+            f"{sys.executable} -c agentinfer.agentcache.entrypoints.cli.main "
+            f"bench serve --agentinfer replay --config {config_path}",
         ],
         "metrics": metrics,
         "status": status,
@@ -414,7 +433,7 @@ def main() -> int:
                     seed=DEFAULT_SEED,
                     task_num=2,
                 )
-                run_replay(args.vllm, warmup_config, warmup_log, args.repo)
+                run_replay(sys.executable, warmup_config, warmup_log, args.repo)
             for repeat in range(1, profile_rounds + 1):
                 round_number = next_number + len(pending)
                 round_id = f"I{round_number}"
@@ -432,7 +451,7 @@ def main() -> int:
                     seed=DEFAULT_SEED,
                     task_num=2,
                 )
-                return_code = run_replay(args.vllm, config_path, replay_log, args.repo)
+                return_code = run_replay(sys.executable, config_path, replay_log, args.repo)
                 metrics, failure = summarize(result_dir)
                 if return_code != 0:
                     failure = failure or f"Replay command exited with code {return_code}"
