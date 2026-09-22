@@ -79,15 +79,23 @@ ledger 与 read-only dashboard。真实 dashboard 只读取 `experiments.jsonl`�
 拒绝；新增证据通过 `python -m agentinfer.rsi experiments append` 写入，每轮保留 hypothesis、
 change、metrics、failure reason、next test 与 evidence hash。
 
-## 当前结论与下一轮
+## 当前结论与 50 轮效果
 
-在已经完成且有效的对比中，当前候选是 seed-228、两 session 样本的 TP4：203.280 output
-tok/s；TP2×2 为 154.174 output tok/s。TP1×4 尚未运行，因为先完成了有效 TP4 样本与质量
-门禁；后续必须在相同 sticky workload 和 evidence contract 下运行，才可替换当前候选。
+修正后的 sweep 为 I11–I60：10 个 TP4 serving profile、每个 5 次有效测量，每个 profile
+先做一次不计入排名的 warmup；seed-228、2-task、并发 2 的 replay contract 全部冻结。
+I5–I9 保留为第一次命令 harness 失败，I10 在 50 轮开始前验证了修复后的 AgentInfer
+dispatcher。
 
-后续 50 轮新增 I5–I54，分为 10 个 serving profile、每个 profile 5 次 warm repetition。
-固定 trace、seed、exact calibration、2-task replay、TP4 卡位和并发，只逐项测试 prefix
-caching、scheduler token budget、异步调度、stream interval、sequence limit 和 FP8 KV。
-用 profile 的中位数和离散度选择候选，单次最高值不会自动晋级；FP8 KV 必须重新通过
-完整 GSM8K 门禁。缺少质量结果、完整 replay 覆盖或环境 metadata 的轮次记为
-`inconclusive`，不按零吞吐处理。
+当前通过质量门禁的最好 profile 是 BF16 TP4 + prefix caching +
+`--max-num-batched-tokens=32768`：5 次 replay-valid 的中位输出吞吐为 210.385 tok/s，
+相对重复 baseline 中位数 208.347 提升 0.98%；完整 GSM8K 为 1255/1319 = 95.1478%。
+FP8 KV 的 replay 中位数略高，为 210.658 tok/s，但 GSM8K 只有 1251/1319 = 94.8446%，
+低于 BF16 参考值 95.0720%，因此拒绝晋级。`batch-8192` 只有 1 次完整 replay，其余
+4 次均是 27/36 覆盖，不能作为收益。
+
+后续组合检查把 `batch-32768` 和 `async-on` 合并，5 次均 replay-valid，但中位数只有
+208.134 tok/s，因此保留单变量 profile。每一轮具体的优化点与效果见
+[qwen38-b300-50-round-results.md](../../rsi/qwen38-b300-50-round-results.md)；review 资产见
+[dashboard](../../assets/rsi/qwen38-rsi-dashboard.png) 和
+[更新后的架构图](../../assets/rsi/qwen38-b300-architecture.png)。分层知识库中已经记录
+vLLM、Z.ai 与 NVlabs KDA 的流程规则和本轮晋级结论。

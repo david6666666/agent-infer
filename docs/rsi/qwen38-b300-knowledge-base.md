@@ -121,18 +121,78 @@ not evidence that a KDA kernel is used by Qwen3.8.
 | Quality-qualified | Candidate plus full deterministic GSM8K | The profile may be promoted for this model/task |
 | Kernel-qualified | Kernel correctness oracle, boundary shapes, profiler/microbenchmark evidence and E2E confirmation | A kernel-derived optimization may be retained |
 
-## Current 50-round experiment plan
+## Knowledge-base layout
 
-The follow-up adds I5–I54 as ten serving profiles with five warm repetitions
-each. The exact replay contract remains seed 228, two tasks, concurrency two,
-zero calibration tolerance, cached Trace IR and TP4 on GPUs 0–3. The first
-profile is a repeated control; the remaining profiles test one vLLM control at
-a time: prefix caching, scheduler token budget, asynchronous scheduling,
-stream interval, max sequences and FP8 KV storage. FP8 KV storage cannot be
-promoted without rerunning GSM8K.
+The working set now has one stable index and generated evidence extracts:
 
-The runner is resumable and appends only after each profile's server log is
-closed, so evidence hashes refer to final files. It performs one unranked warmup
-per profile and stores all replay outputs under the benchmark run directory.
-The final decision uses profile medians and spread; the fastest single sample
-does not automatically win.
+```text
+docs/rsi/qwen38-b300-knowledge-base.md   # controls, rules and promotion state
+docs/rsi/qwen38-b300-50-round-results.md # per-round optimization point/effect
+docs/rsi/qwen38-b300-architecture.mmd    # source architecture
+docs/assets/rsi/qwen38-b300-architecture.png
+docs/assets/rsi/qwen38-rsi-dashboard.png # review-friendly dashboard snapshot
+tools/rsi_replay_sweep.py                # resumable controlled sweep
+tools/render_rsi_dashboard.py            # deterministic PNG renderer
+```
+
+The append-only ledger remains the source of truth. The markdown result extract
+and PNG are review artifacts generated from that ledger; they do not replace
+the raw replay directories, Prometheus snapshots or evidence hashes.
+
+## 50-round sweep result
+
+The corrected sweep is I11–I60: ten profiles, five measured repetitions per
+profile, one unranked warmup per profile. It keeps seed 228, two tasks,
+concurrency two, exact calibration, the cached conversion bundle, TP4 on GPUs
+0–3, BF16 weights, prefix caching and max context 262144 fixed. I5–I9 are
+preserved command-harness failures from the first attempt, when the environment
+used the upstream vLLM console script instead of the AgentInfer dispatcher.
+The runner now invokes the repository dispatcher explicitly and I10 verified
+the corrected path before the sweep.
+
+| Profile | Replay-valid | Median output tok/s | Range | Delta vs repeated baseline | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| baseline-current | 5/5 | 208.347 | 205.072–212.562 | +0.00% | control |
+| no-prefix-cache | 5/5 | 143.964 | 143.515–146.455 | -30.90% | reject |
+| batch-8192 | 1/5 | 210.503* | 210.503 | +1.03%* | reject coverage |
+| batch-32768 | 5/5 | 210.385 | 202.529–213.529 | +0.98% | quality-qualified |
+| batch-65536 | 5/5 | 208.680 | 201.952–212.749 | +0.16% | no promotion |
+| async-on | 5/5 | 209.065 | 206.643–211.929 | +0.34% | no promotion |
+| async-off | 5/5 | 186.674 | 182.972–188.543 | -10.40% | reject |
+| stream-8 | 5/5 | 208.524 | 203.478–212.204 | +0.08% | no promotion |
+| max-seqs-8 | 5/5 | 206.784 | 204.168–211.157 | -0.75% | no promotion |
+| kv-fp8 | 5/5 | 210.658 | 203.665–213.419 | +1.11% | reject quality |
+
+`batch-8192` produced one complete 36/36 replay at 210.503 tok/s, but its
+other four repetitions completed only 27/36 requests and skipped eight
+dependent requests. The single high result is excluded from promotion.
+
+The FP8 KV profile was the fastest median, but its independent GSM8K result was
+1251/1319 = 94.8446%, below the BF16 reference 1254/1319 = 95.0720%, so it is
+rejected. The BF16 `batch-32768` candidate scored 1255/1319 = 95.1478% and
+passes the quality gate. A post-sweep interaction check I63–I67 combined
+`batch-32768` with `async-on`; it was replay-valid but its median was 208.134
+tok/s, below the single-control candidate, so the controls are not combined.
+
+The current quality-qualified choice is TP4 with prefix caching, BF16 weights
+and `--max-num-batched-tokens=32768`: 210.385 median output tok/s on this
+36-request replay sample and 95.1478% GSM8K accuracy. This is the best observed
+candidate under the frozen contract, rather than a claim that every possible
+vLLM control or workload scale has been exhausted.
+
+The complete per-round optimization point and effect is in
+[qwen38-b300-50-round-results.md](qwen38-b300-50-round-results.md). The
+dashboard image is generated from the same ledger and the architecture image
+shows the relationship between workload, serving profiles, evidence, quality
+and the layered knowledge base.
+
+## Next controlled work
+
+The next useful measurement is a clean vLLM-only environment, followed by a
+larger trace sample and representative concurrency sweep. Kernel-level work is
+eligible only after the serving profile is frozen: it must add a correctness
+oracle, decode/prefill shape coverage, profiler or microbenchmark evidence and
+an E2E replay confirmation. The vLLM skill rules, Z.ai dense-feedback model and
+KDA task-contract discipline remain the procedure for those experiments; the
+50-round numbers above are the model-specific evidence that determines
+promotion.

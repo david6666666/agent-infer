@@ -131,20 +131,27 @@ pass exact input accounting, the service is healthy, and the frozen GSM8K
 protocol has a recorded accuracy result. Missing quality or environment data
 is `inconclusive`, not a zero.
 
-## Current result and next experiment
+## Current result and 50-round effect
 
-Among the completed valid comparisons, the current candidate is TP4 at 203.280
-output tok/s on the seed-228 two-session sample. TP2 × 2 is lower at 154.174
-output tok/s. TP1 × 4 was not run because the valid TP4 sample and quality gate
-were completed first; it must use the same sticky workload and evidence contract
-before it can displace the candidate.
+The corrected sweep is I11–I60: ten TP4 serving profiles with five measured
+repetitions each, one unranked warmup per profile, and the same seed-228,
+two-task, concurrency-two replay contract. I5–I9 remain visible as command
+harness failures from the first attempt; I10 verified the repaired AgentInfer
+dispatcher before the 50 valid rounds started.
 
-The follow-up 50-round sweep adds I5–I54 as ten serving profiles with five warm
-repetitions each. It keeps the trace, seed, exact calibration, two-task replay,
-TP4 allocation and concurrency fixed while testing prefix caching, scheduler
-token budgets, asynchronous scheduling, stream interval, sequence limits and
-FP8 KV storage. The fastest single sample does not automatically win; profile
-medians and spread decide which profile receives the full GSM8K gate. Readiness
-time is reported separately from steady-state output-token throughput. A result
-with missing quality, incomplete replay coverage or environment metadata is
-`inconclusive`, not zero.
+The best quality-qualified profile is BF16 TP4 with prefix caching and
+`--max-num-batched-tokens=32768`: 210.385 median output tok/s over five
+replay-valid runs, +0.98% versus the repeated baseline median of 208.347, and
+1255/1319 = 95.1478% GSM8K accuracy. FP8 KV had a slightly higher replay median
+(210.658 tok/s) but scored 1251/1319 = 94.8446%, below the BF16 95.0720%
+reference, so it was rejected. The `batch-8192` profile produced one fast
+complete run but failed coverage in its other four repetitions.
+
+A post-sweep five-run interaction check combining `batch-32768` with
+`async-on` was replay-valid but reached only 208.134 median tok/s; the controls
+remain separate. The complete per-round optimization point and effect is in
+[qwen38-b300-50-round-results.md](../../rsi/qwen38-b300-50-round-results.md).
+The review assets are [the dashboard](../../assets/rsi/qwen38-rsi-dashboard.png)
+and [the updated architecture](../../assets/rsi/qwen38-b300-architecture.png).
+The layered knowledge base records the external vLLM, Z.ai and NVlabs KDA
+workflow rules and the promotion decisions.
