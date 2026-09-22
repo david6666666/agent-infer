@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the AgentInfer project
 
-"""Loopback-only demo API; no serving engine, shell, or deployment adapters."""
+"""Loopback demo API and read-only reported experiment evidence."""
 
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,12 +10,14 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from agentinfer.rsi.controller import Controller
+from agentinfer.rsi.dashboard.experiments import render_experiments
+from agentinfer.rsi.experiments import list_experiments
 from agentinfer.rsi.feedback import list_layers
 from agentinfer.rsi.knowledge import KnowledgeRepository
 
 
-def make_handler(db_path, run_id):
-    """Create a handler for a single demonstration run, without starting a server."""
+def make_handler(db_path, run_id, *, real_experiments=False):
+    """Create a demo handler or a read-only experiment handler."""
     db_path = Path(db_path)
 
     class Handler(BaseHTTPRequestHandler):
@@ -43,7 +45,24 @@ def make_handler(db_path, run_id):
             request = urlsplit(self.path)
             query = parse_qs(request.query)
             try:
-                if request.path in ("/", "/dashboard.html"):
+                if request.path == "/api/rsi/experiments":
+                    self._send(
+                        {
+                            "source": "experiments.jsonl",
+                            "read_only": True,
+                            "production_connected": False,
+                            "acceptance_evaluated": False,
+                            "records": list_experiments(db_path.parent),
+                        }
+                    )
+                elif request.path == "/experiments.html" or (
+                    real_experiments and request.path in ("/", "/dashboard.html")
+                ):
+                    html = render_experiments(list_experiments(db_path.parent)).encode("utf-8")
+                    self._send(html, content_type="text/html; charset=utf-8")
+                elif real_experiments:
+                    self._send({"error": "Unknown endpoint"}, 404)
+                elif request.path in ("/", "/dashboard.html"):
                     html = files("agentinfer.rsi.dashboard").joinpath("static/dashboard.html").read_bytes()
                     self._send(html, content_type="text/html; charset=utf-8")
                 elif request.path == "/api/rsi/snapshot":
@@ -62,6 +81,8 @@ def make_handler(db_path, run_id):
                     )
                 else:
                     self._send({"error": "Unknown endpoint"}, 404)
+            except OSError:
+                self._send({"error": "Unable to read local experiment evidence"}, 500)
             except (KeyError, ValueError, RuntimeError) as error:
                 self._send({"error": str(error)}, 400)
 
@@ -85,6 +106,9 @@ def make_handler(db_path, run_id):
             origin = self.headers.get("Origin")
             if origin and origin != f"http://{self.headers.get('Host')}":
                 self._send({"error": "Cross-origin commands are not accepted"}, 403)
+                return
+            if real_experiments or urlsplit(self.path).path in ("/api/rsi/experiments", "/experiments.html"):
+                self._send({"error": "Real experiment evidence is read-only over HTTP; use the append CLI"}, 405)
                 return
             if urlsplit(self.path).path != "/api/rsi/commands":
                 self._send({"error": "Unknown endpoint"}, 404)
@@ -114,13 +138,16 @@ def make_handler(db_path, run_id):
     return Handler
 
 
-def serve(run_dir, *, run_id="demo-r024", port=8877):
-    """Serve only on IPv4 loopback. Caller must initialize a demo run first."""
+def serve(run_dir, *, run_id="demo-r024", port=8877, real_experiments=False):
+    """Serve on IPv4 loopback; real-experiment mode does not create demo state."""
     db_path = Path(run_dir) / "state.sqlite"
-    if not Controller(db_path).get(run_id)["demo"]:
+    if not real_experiments and not Controller(db_path).get(run_id)["demo"]:
         raise ValueError("The bootstrap HTTP server only serves demo runs")
-    with ThreadingHTTPServer(("127.0.0.1", port), make_handler(db_path, run_id)) as server:
-        print(f"RSI demo: http://127.0.0.1:{server.server_address[1]}/dashboard.html", flush=True)
+    with ThreadingHTTPServer(
+        ("127.0.0.1", port), make_handler(db_path, run_id, real_experiments=real_experiments)
+    ) as server:
+        view = "experiments.html" if real_experiments else "dashboard.html"
+        print(f"RSI: http://127.0.0.1:{server.server_address[1]}/{view}", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

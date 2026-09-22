@@ -1,0 +1,21 @@
+flowchart LR
+    A[Codex CLI
+       read-only inspection] --> B[Inferact
+       codex_swebenchpro trace]
+    B --> C[AgentBench converter
+       tokenizer + Trace IR]
+    C --> D[Replay planner/executor
+       exact input targets]
+    D --> E[vLLM serving
+       Qwen3.8-27B · 4×B300]
+    E --> F[Prometheus + request
+       raw evidence]
+    E --> G[GSM8K API evaluator
+       deterministic scoring]
+    F --> H[RSI experiment ledger
+       append-only JSONL]
+    G --> H
+    H --> I[Read-only dashboard
+       iteration effect + gates]
+    I --> J[PR comment
+       architecture + dashboard]

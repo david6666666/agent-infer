@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the AgentInfer project
 
-"""CPU-only entry point for offline feedback and demonstration state."""
+"""CPU-only entry point for offline feedback, demo state and evidence."""
 
 import argparse
 import json
@@ -57,6 +57,13 @@ def parser():
     evaluate = commands.add_parser("evaluate", help="Evaluate frozen checks from a feedback JSON manifest")
     evaluate.add_argument("input", type=Path)
     evaluate.add_argument("--output", type=Path)
+    experiments = commands.add_parser("experiments", help="Append or list reported experiment evidence")
+    experiment_commands = experiments.add_subparsers(dest="experiment_command", required=True)
+    append = experiment_commands.add_parser("append", help="Append one record from JSON; never execute it")
+    append.add_argument("--input", type=Path, required=True)
+    listing = experiment_commands.add_parser("list", help="Read experiments.jsonl without creating state")
+    for item in (append, listing):
+        item.add_argument("--run-dir", type=Path, required=True)
     for name in ("demo", "status", "command", "knowledge", "serve"):
         item = commands.add_parser(name)
         item.add_argument("--run-dir", type=Path, default=Path(".rsi-demo"))
@@ -75,6 +82,9 @@ def parser():
             item.add_argument("--text", default="")
         if name == "serve":
             item.add_argument("--port", type=int, default=8877)
+            item.add_argument(
+                "--real-experiments", action="store_true", help="Serve only the read-only experiment ledger"
+            )
     return result
 
 
@@ -97,6 +107,14 @@ def main(argv=None):
             _write(report, args.output)
         elif args.command == "demo":
             _write(_demo(args.run_dir, args.run_id))
+        elif args.command == "experiments":
+            from agentinfer.rsi.experiments import append_experiment, list_experiments, load_experiment_json
+
+            if args.experiment_command == "append":
+                record = load_experiment_json(args.input.read_text(encoding="utf-8"))
+                _write(append_experiment(args.run_dir, record))
+            else:
+                _write(list_experiments(args.run_dir))
         elif args.command == "status":
             _write(_controller(args.run_dir).get(args.run_id))
         elif args.command == "command":
@@ -127,7 +145,7 @@ def main(argv=None):
         elif args.command == "serve":
             from agentinfer.rsi.dashboard.server import serve
 
-            serve(args.run_dir, run_id=args.run_id, port=args.port)
+            serve(args.run_dir, run_id=args.run_id, port=args.port, real_experiments=args.real_experiments)
     except (OSError, ValueError, KeyError, RuntimeError) as error:
         print(f"RSI: {error}", file=sys.stderr)
         return 2
