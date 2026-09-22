@@ -14,6 +14,13 @@
 Replay 会重建请求间隔、上下文和 token 目标，但不会运行原始 Codex agent、工具或
 SWE-bench 判题。因此 replay 是 serving workload，不是 agent 正确率。
 
+系统层、runtime 层、kernel 层、证据协议和晋级门禁统一整理在
+[Qwen3.8-27B B300 知识库](../../rsi/qwen38-b300-knowledge-base.md) 中，并吸收了
+[vLLM kernel benchmark workflow](https://github.com/vllm-project/vllm/blob/main/.agents/skills/kernel-microbenchmark/SKILL.md)、
+[vLLM Triton guidance](https://github.com/vllm-project/vllm/blob/main/.agents/skills/triton-kernel-writing/SKILL.md)、
+[Z.ai dense feedback 经验](https://z.ai/blog/glm-built-its-inference-infrastructure)
+以及 [NVlabs KDA workflow](https://github.com/NVlabs/kda)。
+
 本轮冻结的证据标识如下：
 
 * raw trace SHA256：`670f1ae8325fd70aac6ae6bdf4b03bbbd740d6ac8f2b49d8a02daaee3193fbc3`
@@ -78,5 +85,9 @@ change、metrics、failure reason、next test 与 evidence hash。
 tok/s；TP2×2 为 154.174 output tok/s。TP1×4 尚未运行，因为先完成了有效 TP4 样本与质量
 门禁；后续必须在相同 sticky workload 和 evidence contract 下运行，才可替换当前候选。
 
-下一轮 RSI 应先切换到纯 vLLM 环境，重复 TP4 三次，再运行 TP1×4 或 native data parallel。
-缺少质量结果、完整 replay 覆盖或环境 metadata 的轮次记为 `inconclusive`，不按零吞吐处理。
+后续 50 轮新增 I5–I54，分为 10 个 serving profile、每个 profile 5 次 warm repetition。
+固定 trace、seed、exact calibration、2-task replay、TP4 卡位和并发，只逐项测试 prefix
+caching、scheduler token budget、异步调度、stream interval、sequence limit 和 FP8 KV。
+用 profile 的中位数和离散度选择候选，单次最高值不会自动晋级；FP8 KV 必须重新通过
+完整 GSM8K 门禁。缺少质量结果、完整 replay 覆盖或环境 metadata 的轮次记为
+`inconclusive`，不按零吞吐处理。

@@ -19,6 +19,13 @@ score. The raw trace is kept outside the repository because the 610-record
 source is large; its URL, SHA256 and conversion manifest are recorded in each
 experiment ledger entry.
 
+The structured serving, runtime, kernel, evidence and promotion rules are kept
+in the [Qwen3.8-27B B300 knowledge base](../../rsi/qwen38-b300-knowledge-base.md).
+It incorporates the [vLLM kernel benchmark workflow](https://github.com/vllm-project/vllm/blob/main/.agents/skills/kernel-microbenchmark/SKILL.md),
+the [vLLM Triton guidance](https://github.com/vllm-project/vllm/blob/main/.agents/skills/triton-kernel-writing/SKILL.md),
+the [Z.ai dense-feedback account](https://z.ai/blog/glm-built-its-inference-infrastructure)
+and the [NVlabs KDA workflow](https://github.com/NVlabs/kda).
+
 ## Frozen controls
 
 | Control | Value |
@@ -132,9 +139,12 @@ output tok/s. TP1 × 4 was not run because the valid TP4 sample and quality gate
 were completed first; it must use the same sticky workload and evidence contract
 before it can displace the candidate.
 
-The next RSI round should run three repeated TP4 measurements after moving to a
-clean vLLM-only environment, then run TP1 × 4 or native data parallel if the
-same request routing and exact accounting can be preserved. Readiness time is
-reported separately from steady-state output-token throughput. A result with
-missing quality, incomplete replay coverage or environment metadata is
+The follow-up 50-round sweep adds I5–I54 as ten serving profiles with five warm
+repetitions each. It keeps the trace, seed, exact calibration, two-task replay,
+TP4 allocation and concurrency fixed while testing prefix caching, scheduler
+token budgets, asynchronous scheduling, stream interval, sequence limits and
+FP8 KV storage. The fastest single sample does not automatically win; profile
+medians and spread decide which profile receives the full GSM8K gate. Readiness
+time is reported separately from steady-state output-token throughput. A result
+with missing quality, incomplete replay coverage or environment metadata is
 `inconclusive`, not zero.
