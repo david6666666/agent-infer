@@ -186,6 +186,21 @@ dashboard image is generated from the same ledger and the architecture image
 shows the relationship between workload, serving profiles, evidence, quality
 and the layered knowledge base.
 
+## Harness lessons kept out of performance ranking
+
+The first sweep attempt used the environment's pre-existing upstream `vllm`
+console script. It bypassed the repository dispatcher, so the replay config was
+parsed as an upstream vLLM benchmark type. I5–I9 remain as failed ledger
+records; the corrected runner invokes
+`agentinfer.agentcache.entrypoints.cli.main` through the active Python
+environment and I10 is the executable smoke proof.
+
+The GSM8K evaluator's parser is also part of the task contract: its endpoint
+flag is `--endpoint` and its result-file flag is `--output`. Two rejected local
+launch attempts used `--base-url`/`--output-dir`; they produced no result and
+were not appended to the experiment ledger. I61 and I62 contain the corrected
+commands and final quality evidence.
+
 ## Next controlled work
 
 The next useful measurement is a clean vLLM-only environment, followed by a
