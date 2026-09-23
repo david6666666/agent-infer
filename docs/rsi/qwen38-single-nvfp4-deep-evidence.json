@@ -4,7 +4,14 @@
   "scope": "single B300, TP1, Inferact/Qwen3.8-27B-NVFP4",
   "target": {
     "output_tokens_per_second": 300,
-    "interpretation": "The target is evaluated separately for the short fixed replay and the longer sustained replay; a pass on the latter must not be presented as a pass on the former."
+    "interpretation": "The target is evaluated separately for the short fixed replay and the longer sustained replay; a pass on the latter must not be presented as a pass on the former.",
+    "sustained_confirmation": {
+      "candidate_runs_tok_s": [358.374651, 347.045683],
+      "median_tok_s": 352.710167,
+      "baseline_tok_s": 339.991434,
+      "delta_vs_baseline_pct": 3.741,
+      "all_runs_coverage": "89/89, residual 0"
+    }
   },
   "contract": {
     "model": "Inferact/Qwen3.8-27B-NVFP4",
@@ -321,6 +328,20 @@
       "coverage": "36/36, residual 0",
       "profile_effect": "worker hit 7936 copy calls with 11 ring allocations; GPU execute 6.609 ms, CPU gap 2.602 ms vs 2.598 ms baseline",
       "decision": "reject; allocator reuse did not remove the host bubble or improve E2E"
+    },
+    {
+      "id": "D13",
+      "layer": "sustained confirmation",
+      "profile": "GDN state BF16 + aligned cache, 4-task repeat",
+      "change": "Repeat D11 with the same serving contract and 4-task/89-request replay to test sustained reproducibility.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 347.045683,
+      "delta_vs_workload_baseline_pct": 2.075,
+      "acceptance_length": 3.376937,
+      "prefix_cache_hit_rate": 0.924303,
+      "coverage": "89/89, residual 0",
+      "decision": "confirmation pass; sustained target remains above 300"
     }
   ],
   "quality": [

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 from pathlib import Path
 from typing import Any
 
@@ -112,7 +113,21 @@ def _short_rows(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def _sustained_rows(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     rows = [row for row in data["iterations"] if row["tasks"] == 4]
-    return min(rows, key=lambda row: row["output_tok_s"]), max(rows, key=lambda row: row["output_tok_s"])
+    control = next(row for row in rows if row["id"] == "D10")
+    candidates = [row for row in rows if row["id"] != control["id"] and "reject" not in str(row["decision"])]
+    confirmation = dict(max(candidates, key=lambda row: row["output_tok_s"]))
+    confirmation["id"] = "/".join(row["id"] for row in candidates)
+    confirmation["output_tok_s"] = statistics.median(float(row["output_tok_s"]) for row in candidates)
+    confirmation["decision"] = "confirmation median"
+    return control, confirmation
+
+
+def _sustained_candidates(data: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in data["iterations"]
+        if row["tasks"] == 4 and row["id"] != "D10" and "reject" not in str(row["decision"])
+    ]
 
 
 def _draw_profile_panel(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
@@ -130,7 +145,7 @@ def _draw_profile_panel(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None
         ("FP4 conversion", 16.920, "ms aggregate", ORANGE),
     ]
     max_value = max(value for _, value, _, _ in rows)
-    chart_x, chart_y, chart_w = 330, 510, 760
+    chart_x, chart_y, chart_w = 330, 510, 620
     for index, (label, value, detail, color) in enumerate(rows):
         y = chart_y + index * 57
         _text(draw, (88, y + 5), label, SMALL, INK)
@@ -176,34 +191,39 @@ def _draw_workload_chart(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> Non
     _panel(draw, box)
     _text(draw, (88, 1070), "Target view · same target, two workload scopes", HEADING)
     _text(draw, (88, 1110), "300 tok/s line; short replay and sustained replay are ranked separately.", SMALL, MUTED)
+    short_control, short_best = _short_rows(data)
+    sustained_control, sustained_confirmation = _sustained_rows(data)
+    sustained_peak = max(_sustained_candidates(data), key=lambda row: row["output_tok_s"])
     rows = [
-        ("short control D0", 238.106, BLUE),
-        ("short best D3", 250.491, GREEN),
-        ("sustained control D10", 339.991, BLUE),
-        ("sustained winner D11", 358.375, GREEN),
+        ("short control D0", float(short_control["output_tok_s"]), BLUE),
+        ("short best D3", float(short_best["output_tok_s"]), GREEN),
+        ("sustained control D10", float(sustained_control["output_tok_s"]), BLUE),
+        ("sustained confirm median D11/D13", float(sustained_confirmation["output_tok_s"]), GREEN),
+        ("sustained peak D11", float(sustained_peak["output_tok_s"]), PURPLE),
     ]
     chart_x, chart_y, chart_w = 300, 1190, 570
     max_value = 380.0
     target_x = chart_x + int(chart_w * 300 / max_value)
-    draw.line((target_x, chart_y - 25, target_x, chart_y + len(rows) * 94), fill=RED, width=4)
+    row_step = 72
+    draw.line((target_x, chart_y - 25, target_x, chart_y + len(rows) * row_step), fill=RED, width=4)
     _text(draw, (target_x - 34, chart_y - 53), "300", SMALL_BOLD, RED)
     for index, (label, value, color) in enumerate(rows):
-        y = chart_y + index * 94
+        y = chart_y + index * row_step
         _text(draw, (88, y + 8), label, SMALL, INK)
         bar_w = int(chart_w * value / max_value)
         draw.rounded_rectangle((chart_x, y, chart_x + bar_w, y + 30), radius=6, fill=color)
         _text(draw, (chart_x + chart_w + 18, y + 7), f"{value:.1f} tok/s", SMALL_BOLD, color)
-    draw.line((88, 1575, 940, 1575), fill=GRID, width=1)
-    _text(draw, (88, 1610), "Interpretation", SMALL_BOLD, MUTED)
+    draw.line((88, 1540, 940, 1540), fill=GRID, width=1)
+    _text(draw, (88, 1570), "Interpretation", SMALL_BOLD, MUTED)
     interpretation = [
-        "Short fixed replay: the best measured result is 250.5 tok/s, below target.",
-        "Sustained 4-task replay: baseline already reaches 340.0 tok/s; D11 reaches 358.4.",
-        "D11 is a current candidate, pending clean vLLM-only confirmation and GSM8K rerun.",
+        f"Short fixed replay: the best measured result is {float(short_best['output_tok_s']):.1f} tok/s, below target.",
+        f"Sustained replay: D11/D13 median is {float(sustained_confirmation['output_tok_s']):.1f} tok/s; peak is {float(sustained_peak['output_tok_s']):.1f}.",
+        "The sustained result is repeated, pending clean vLLM-only confirmation and GSM8K rerun.",
     ]
     for index, line in enumerate(interpretation):
-        _text(draw, (88, 1650 + index * 34), "• " + line, TINY, INK)
-    _text(draw, (88, 1775), "Target status: PASS for sustained workload / OPEN for short replay", SMALL_BOLD, ORANGE)
-    _text(draw, (88, 1810), "Do not transfer the sustained result to a different concurrency or request mix.", TINY, MUTED)
+        _text(draw, (88, 1610 + index * 34), "• " + line, TINY, INK)
+    _text(draw, (88, 1735), "Target status: PASS for sustained workload / OPEN for short replay", SMALL_BOLD, ORANGE)
+    _text(draw, (88, 1770), "Do not transfer the sustained result to a different concurrency or request mix.", TINY, MUTED)
 
 
 def _draw_round_table(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
@@ -228,7 +248,7 @@ def _draw_round_table(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
         if len(change) > 58:
             change = change[:55] + "..."
         decision = str(row["decision"])
-        color = GREEN if row["id"] in {"D3", "D11"} else RED if "reject" in decision or "invalid" in decision else INK
+        color = GREEN if row["id"] in {"D3", "D11", "D13"} else RED if "reject" in decision or "invalid" in decision else INK
         values = [row["id"], layer[:21], change, f"{float(row['output_tok_s']):.1f}", f"{delta:+.1f}%", decision[:34]]
         x = x0
         for value, (_, width) in zip(values, headers, strict=True):
@@ -253,7 +273,7 @@ def render(data: dict[str, Any], output: Path) -> None:
     _card(draw, (60, 235, 410, 345), "SHORT CONTROL", f"{float(short_control['output_tok_s']):.1f} tok/s", "2 tasks · 36 requests")
     _card(draw, (430, 235, 780, 345), "SHORT BEST", f"{float(short_best['output_tok_s']):.1f} tok/s", f"D3 · {short_delta:+.2f}%", value_color=GREEN)
     _card(draw, (800, 235, 1150, 345), "SUSTAINED CONTROL", f"{float(sustained_control['output_tok_s']):.1f} tok/s", "4 tasks · 89 requests")
-    _card(draw, (1170, 235, 1520, 345), "SUSTAINED WINNER", f"{float(sustained_best['output_tok_s']):.1f} tok/s", f"D11 · {sustained_delta:+.2f}%", value_color=GREEN)
+    _card(draw, (1170, 235, 1520, 345), "SUSTAINED CONFIRM", f"{float(sustained_best['output_tok_s']):.1f} tok/s", f"D11/D13 median · {sustained_delta:+.2f}%", value_color=GREEN)
     _card(draw, (1540, 235, 1890, 345), "CPU GAP", "2.598 ms", "39.1% of GPU execute", value_color=ORANGE)
     _card(draw, (1910, 235, 2340, 345), "GPU EXECUTE", "6.641 ms", "profile mean / iteration", value_color=BLUE)
 

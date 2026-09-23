@@ -19,7 +19,7 @@
 
 profile 证明原来的收益小，主要不是缺少一个服务开关，而是 decode iteration 的 host 工作和 hybrid model operator 共同决定了吞吐。16 个 steady GPU execute span 的平均 GPU execute 为 **6.641 ms**，相邻 GPU span 之间的 CPU gap 平均 **2.598 ms**，约等于 GPU execute 的 **39.1%**。gap 中最值得继续做架构优化的调用点是 `prepare_inputs`、scheduler `schedule/update_from_output`、KV slot/metadata 生成和 UVA copy；算子侧的主要时间集中在 NVFP4 block scaled GEMM、GDN qkvz、GDN chunked、FP4 conversion 以及 post-conv。
 
-当前没有把单次峰值误报成普遍结果：短的 2-task/36-request replay 最高仍为 **250.491 tok/s**；在 4-task/89-request 的 sustained replay 中，用户 baseline 为 **339.991 tok/s**，BF16 recurrent state + aligned cache 为 **358.375 tok/s**，相对该 workload **+5.41%**。因此 **300 tok/s 已在 sustained workload 上达到**，但短 replay 仍未达到；下一轮必须在 clean vLLM-only 环境重复两种 workload 后才能晋级默认 recipe。
+当前没有把单次峰值误报成普遍结果：短的 2-task/36-request replay 最高仍为 **250.491 tok/s**；在 4-task/89-request 的 sustained replay 中，用户 baseline 为 **339.991 tok/s**，BF16 recurrent state + aligned cache 两次为 **358.375/347.046 tok/s**，中位数 **352.710 tok/s**，相对 baseline **+3.74%**。因此 **300 tok/s 已在 sustained workload 上重复达到**，但短 replay 仍未达到；下一轮必须在 clean vLLM-only 环境重复两种 workload 后才能晋级默认 recipe。
 
 ## Profile 证据
 
@@ -67,7 +67,7 @@ D12 进一步复用了 GPU output 和 pinned host source：worker 实际命中�
 
 ## 每轮优化点与效果
 
-以下是这轮深度迭代的完整台账。D0–D9 和 D12 是 2 tasks/36 requests 的 short replay；D10/D11 改用 4 tasks/89 requests 测持续 batching，delta 只和同 workload 的 control 比较。
+以下是这轮深度迭代的完整台账。D0–D9 和 D12 是 2 tasks/36 requests 的 short replay；D10/D11/D13 使用 4 tasks/89 requests 测持续 batching，delta 只和同 workload 的 control 比较。
 
 | Round | Layer | Optimization point | Output tok/s | Acceptance | Effect / decision |
 | --- | --- | --- | ---: | ---: | --- |
@@ -84,6 +84,7 @@ D12 进一步复用了 GPU output 和 pinned host source：worker 实际命中�
 | D10 | sustained control | MTP3 baseline, 4-task replay | 339.991 | 3.386 | 89/89；sustained target pass |
 | D11 | recurrent/cache | BF16 state + aligned cache, 4-task replay | 358.375 | 3.352 | +5.41%；89/89；当前 sustained winner |
 | D12 | CPU input buffers | depth-2 CUDA-event-guarded GPU+pinned input-copy ring | 242.827 | 3.228 | screen 246.863；worker 7936 calls；gap 2.602 ms；reject |
+| D13 | sustained confirmation | BF16 state + aligned cache, 4-task repeat | 347.046 | 3.377 | 89/89；相对 sustained baseline +2.07%；confirmation pass |
 
 ## GSM8K 质量
 
@@ -94,13 +95,13 @@ D12 进一步复用了 GPU output 和 pinned host source：worker 实际命中�
 | GDN state BF16 + aligned cache | 1199 | 1319 | 1216 | 0 | 90.90% |
 | FP8 qkvz + GDN stage | 1205 | 1319 | 1221 | 0 | 91.36% |
 
-质量结果说明这些候选没有出现请求错误或明显精度崩溃；它们仍然必须以 short replay、sustained replay 和 clean environment 的 E2E 共同决定是否晋级。D11 当前没有独立 GSM8K 重跑，所以不能继承 D5 的质量数字作为 D11 的证明。
+质量结果说明这些候选没有出现请求错误或明显精度崩溃；它们仍然必须以 short replay、sustained replay 和 clean environment 的 E2E 共同决定是否晋级。D11/D13 使用同一 BF16 state + aligned cache 配置，当前已有该配置的 GSM8K 证据，但仍需要 clean environment 下的独立质量重跑，不能把 D5 的质量数字直接当作 D11/D13 的证明。
 
 ## 下一轮入口
 
-1. 在没有 editable vLLM-Omni 影响的 clean vLLM-only 环境，重复 D0/D3/D10/D11，并固定同一模型 snapshot、seed、trace 和 client concurrency。
+1. 在没有 editable vLLM-Omni 影响的 clean vLLM-only 环境，重复 D0/D3/D10/D11/D13，并固定同一模型 snapshot、seed、trace 和 client concurrency。
 2. 对 `prepare_inputs`、scheduler metadata、`mamba_get_block_table_tensor` 和 UVA copy 做单独的 CPU microbench；比较 buffer reuse、一次性批量 metadata 和 graph-safe persistent buffers，指标必须是 gap、launch count 和 E2E。
 3. 对 NVFP4 decode、GDN qkvz small decode、GDN postconv、FP4 conversion 做真实 shape coverage 的 CUDA microbench，记录 registers、shared memory、occupancy、kernel time 和 correctness；不再用单一大 M tactic 推断 decode。
-4. D11 通过 quality gate 后再考虑把 BF16 state/aligned cache 写入默认 serving recipe；在此之前只作为 opt-in experiment 保存。
+4. D11/D13 通过 clean quality gate 后再考虑把 BF16 state/aligned cache 写入默认 serving recipe；在此之前只作为 opt-in experiment 保存。
 
 这份报告的 nongoal 是把 358.375 tok/s 外推为任意并发或任意请求分布的保证，也不把未完成的 clean-environment 复核写成默认配置。

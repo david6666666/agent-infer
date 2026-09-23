@@ -24,9 +24,9 @@
 
 profile 的 host gap 主要由 `prepare_inputs`、scheduler `schedule/update_from_output`、KV slot allocation、Mamba block-table metadata、UVA copy 和多次 `aten::index/copy_/to/pin_memory` 组成。GPU 侧主要热点是 NVFP4 block scaled GEMM、GDN qkvz、GDN chunked、FP4 conversion、paged attention 和 causal conv。新的 [深度 dashboard](../assets/rsi/qwen38-single-nvfp4-deep-dashboard.png) 将这两条证据链放在同一张图里；[深度报告](qwen38-single-nvfp4-deep-results.md) 记录每轮具体改动、吞吐、acceptance、覆盖率和晋级/拒绝理由。
 
-当前 profile 驱动候选是 BF16 recurrent state + aligned cache。它在 2-task/36-request replay 中达到 **250.491 tok/s**，在 4-task/89-request sustained replay 中达到 **358.375 tok/s**；同 workload baseline 是 **339.991 tok/s**。这说明 300 tok/s 已在 sustained workload 上达到，但短 replay 仍为 **250.491 tok/s**，不能把两种 workload 合并成一个结论。D11 还没有在 clean vLLM-only 环境完成复核和独立 GSM8K 重跑，所以它保持 opt-in candidate。
+当前 profile 驱动候选是 BF16 recurrent state + aligned cache。它在 2-task/36-request replay 中达到 **250.491 tok/s**，在 4-task/89-request sustained replay 中两次达到 **358.375/347.046 tok/s**，中位数 **352.710 tok/s**；同 workload baseline 是 **339.991 tok/s**，中位数相对提升 **+3.74%**。这说明 300 tok/s 已在 sustained workload 上重复达到，但短 replay 仍为 **250.491 tok/s**，不能把两种 workload 合并成一个结论。D11/D13 仍需 clean vLLM-only 复核和独立 GSM8K 重跑，所以保持 opt-in candidate。
 
-算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；FP8 qkvz、GDN stage tuning、fused metadata、pinned copy pool 和带 CUDA event 的 GPU/pinned input ring 都没有同时降低 profile bottleneck 与 E2E；一个 FP4 tactic 峰值受 acceptance 变化干扰，归因无效。失败实验不会删除，它们是下一轮避免重复试错的约束。
+算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；FP8 qkvz、GDN stage tuning、fused metadata、pinned copy pool 和带 CUDA event 的 GPU/pinned input ring 都没有同时降低 profile bottleneck 与 E2E；一个 FP4 tactic 峰值受 acceptance 变化干扰，归因无效。D12 的 ring 确实命中 7,936 次 worker copy、复用 11 个 allocation，但 CPU gap 仍约 2.602 ms，说明 allocator reuse 没有改变调用拓扑。失败实验不会删除，它们是下一轮避免重复试错的约束。
 
 ## 当前结论
 
@@ -110,4 +110,4 @@ Promotion 需要同时满足：
 
 本轮有意未扫 TP>1、GPU placement、多实例、DBO、`--max-num-seqs`、不同 client concurrency、KV BF16、线性 attention 的所有 cutlass/auto 组合、量化校准重做、speculative thinking budget、长尾 trace 和 clean vLLM-only env。它们不是“已验证无收益”，只是当前 scope 的 omission。
 
-下一轮应先做三件事：在 clean vLLM-only 环境复核 D0/D3/D10/D11；针对 `prepare_inputs`、scheduler metadata、`mamba_get_block_table_tensor` 和 UVA copy 做 buffer reuse、批量 metadata 和 graph-safe persistent buffer 对照；针对 NVFP4 decode、GDN qkvz small decode、GDN postconv 和 FP4 conversion 做真实 decode shape 的 microbenchmark。任何新的知识条目都要附适用 hardware、shape、version、command 和 evidence path，并同时更新 CPU gap、kernel time、replay coverage 和 GSM8K gate。
+下一轮应先做三件事：在 clean vLLM-only 环境复核 D0/D3/D10/D11/D13；针对 `prepare_inputs`、scheduler metadata、`mamba_get_block_table_tensor` 和 UVA copy 做 buffer reuse、批量 metadata 和 graph-safe persistent buffer 对照；针对 NVFP4 decode、GDN qkvz small decode、GDN postconv 和 FP4 conversion 做真实 decode shape 的 microbenchmark。任何新的知识条目都要附适用 hardware、shape、version、command 和 evidence path，并同时更新 CPU gap、kernel time、replay coverage 和 GSM8K gate。
