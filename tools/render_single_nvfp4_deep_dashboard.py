@@ -220,7 +220,7 @@ def _draw_round_table(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
     rows = data["iterations"]
     base_by_tasks = {2: next(row["output_tok_s"] for row in rows if row["id"] == "D0"), 4: next(row["output_tok_s"] for row in rows if row["id"] == "D10")}
     for index, row in enumerate(rows):
-        y = y0 + 44 + index * 56
+        y = y0 + 44 + index * 50
         base = base_by_tasks[int(row["tasks"])]
         delta = (float(row["output_tok_s"]) / base - 1) * 100
         layer = str(row["layer"]).replace("hybrid model / ", "hybrid/")
@@ -234,7 +234,7 @@ def _draw_round_table(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
         for value, (_, width) in zip(values, headers, strict=True):
             _text(draw, (x, y), str(value), MICRO, color if value == decision[:34] else INK)
             x += width
-        draw.line((x0, y + 31, 2310, y + 31), fill="#edf1f3", width=1)
+        draw.line((x0, y + 29, 2310, y + 29), fill="#edf1f3", width=1)
     _text(draw, (1068, 1848), "Every row is replay-valid unless the decision explicitly says invalid attribution; raw paths and gate data are in deep-evidence.json.", TINY, MUTED)
 
 

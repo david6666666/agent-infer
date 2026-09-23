@@ -129,6 +129,7 @@
       "The fixed 128-thread GDN post-conv candidate passed correctness but was slower than the 256-thread production kernel in the direct microbenchmark.",
       "BF16 recurrent state lowered the profiled GDN post-conv group from about 9.814 ms to 9.095 ms over the measured window, but did not remove the host gap.",
       "The pinned host-copy pool reduced the pin_memory operator aggregate but increased the Python copy path and did not reduce the end-to-end CPU gap; it is rejected.",
+      "The CUDA-event-guarded depth-2 input-copy ring hit 7936 worker calls and reused 11 allocations, but the CPU gap moved from about 2.598 ms to 2.602 ms and E2E throughput fell; it is rejected.",
       "The fused FlashInfer metadata hook did not reduce the worker gap; it is rejected as a default change.",
       "The FP4 tactic peak was confounded by speculative acceptance changes and was not promoted as an operator win."
     ]
@@ -303,6 +304,23 @@
       "prefix_cache_hit_rate": 0.924303,
       "coverage": "89/89, residual 0",
       "decision": "current sustained winner; requires clean-environment confirmation"
+    },
+    {
+      "id": "D12",
+      "layer": "CPU input buffer topology",
+      "profile": "persistent GPU + pinned input-copy ring",
+      "change": "Reuse small int32/int64 input copies with a depth-2 CUDA-event-guarded ring; fall back when a slot is in flight.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 242.827490,
+      "screen_output_tok_s": 246.862721,
+      "delta_vs_workload_baseline_pct": 1.983,
+      "relative_to_d3_pct": -3.061,
+      "acceptance_length": 3.228228,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "worker hit 7936 copy calls with 11 ring allocations; GPU execute 6.609 ms, CPU gap 2.602 ms vs 2.598 ms baseline",
+      "decision": "reject; allocator reuse did not remove the host bubble or improve E2E"
     }
   ],
   "quality": [

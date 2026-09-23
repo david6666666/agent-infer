@@ -13,6 +13,7 @@
 - GDN prefill stage probe：[experimental_gdn_prefill_stages.py](../../tools/experimental_gdn_prefill_stages.py)
 - FP4 shape microbenchmark：[experimental_fp4_runner_probe.py](../../tools/experimental_fp4_runner_probe.py)
 - FlashInfer metadata probe：[experimental_fused_flashinfer.py](../../tools/experimental_fused_flashinfer.py)
+- CPU input-copy ring probe：[experimental_input_copy_pool_sitecustomize/sitecustomize.py](../../tools/experimental_input_copy_pool_sitecustomize/sitecustomize.py)
 
 ## 先给结论
 
@@ -47,6 +48,8 @@ Profile 文件来自 MTP3、client concurrency 8、CUDA graph serving path，并
 
 Pinned buffer pool 的对照实验把 `aten::pin_memory` aggregate 从约 0.641 ms 降到 0.239 ms，但 Python copy path 增加，CPU gap 从约 2.598 ms 变成约 2.605 ms，E2E 没有形成可靠收益。因此下一步应优化 copy 的调用拓扑和 metadata 生命周期，不能只替换 pin allocator。
 
+D12 进一步复用了 GPU output 和 pinned host source：worker 实际命中约 7,936 次 copy、分配 11 个 ring slot，说明实验确实进入了 worker path；但 GPU execute 约 6.609 ms、CPU gap 约 2.602 ms，E2E 两次为 246.863 和 242.827 tok/s。它同时没有缩短 host bubble，也没有改善 replay throughput，因此 reject。
+
 ### Operator hotspots
 
 | Layer / operator group | Profile aggregate | 当前判断 |
@@ -64,7 +67,7 @@ Pinned buffer pool 的对照实验把 `aten::pin_memory` aggregate 从约 0.641 
 
 ## 每轮优化点与效果
 
-以下是这轮深度迭代的完整台账。`short replay` 统一指 2 tasks/36 requests；最后两轮改用 4 tasks/89 requests 来测持续 batching，delta 只和同 workload 的 control 比较。
+以下是这轮深度迭代的完整台账。D0–D9 和 D12 是 2 tasks/36 requests 的 short replay；D10/D11 改用 4 tasks/89 requests 测持续 batching，delta 只和同 workload 的 control 比较。
 
 | Round | Layer | Optimization point | Output tok/s | Acceptance | Effect / decision |
 | --- | --- | --- | ---: | ---: | --- |
@@ -80,6 +83,7 @@ Pinned buffer pool 的对照实验把 `aten::pin_memory` aggregate 从约 0.641 
 | D9 | NVFP4 dispatch | force alternative FP4 tactics | 264.689 | 4.261 | acceptance 和 kernel profile 同时变化，归因无效，reject |
 | D10 | sustained control | MTP3 baseline, 4-task replay | 339.991 | 3.386 | 89/89；sustained target pass |
 | D11 | recurrent/cache | BF16 state + aligned cache, 4-task replay | 358.375 | 3.352 | +5.41%；89/89；当前 sustained winner |
+| D12 | CPU input buffers | depth-2 CUDA-event-guarded GPU+pinned input-copy ring | 242.827 | 3.228 | screen 246.863；worker 7936 calls；gap 2.602 ms；reject |
 
 ## GSM8K 质量
 

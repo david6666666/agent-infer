@@ -26,7 +26,7 @@ profile 的 host gap 主要由 `prepare_inputs`、scheduler `schedule/update_fro
 
 当前 profile 驱动候选是 BF16 recurrent state + aligned cache。它在 2-task/36-request replay 中达到 **250.491 tok/s**，在 4-task/89-request sustained replay 中达到 **358.375 tok/s**；同 workload baseline 是 **339.991 tok/s**。这说明 300 tok/s 已在 sustained workload 上达到，但短 replay 仍为 **250.491 tok/s**，不能把两种 workload 合并成一个结论。D11 还没有在 clean vLLM-only 环境完成复核和独立 GSM8K 重跑，所以它保持 opt-in candidate。
 
-算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；FP8 qkvz、GDN stage tuning、fused metadata 和 pinned copy pool 都没有同时降低 profile bottleneck 与 E2E；一个 FP4 tactic 峰值受 acceptance 变化干扰，归因无效。失败实验不会删除，它们是下一轮避免重复试错的约束。
+算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；FP8 qkvz、GDN stage tuning、fused metadata、pinned copy pool 和带 CUDA event 的 GPU/pinned input ring 都没有同时降低 profile bottleneck 与 E2E；一个 FP4 tactic 峰值受 acceptance 变化干扰，归因无效。失败实验不会删除，它们是下一轮避免重复试错的约束。
 
 ## 当前结论
 
