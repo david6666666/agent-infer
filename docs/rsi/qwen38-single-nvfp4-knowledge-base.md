@@ -9,8 +9,24 @@
 - [50 轮逐轮结果](qwen38-single-nvfp4-50-round-results.md)
 - [架构图源文件](qwen38-single-nvfp4-architecture.mmd)
 - [dashboard PNG](../assets/rsi/qwen38-single-nvfp4-dashboard.png)
+- [profile 驱动深度迭代报告](qwen38-single-nvfp4-deep-results.md)
+- [深度证据台账](qwen38-single-nvfp4-deep-evidence.json)
+- [深度架构图源文件](qwen38-single-nvfp4-deep-architecture.mmd)
+- [深度架构图 PNG](../assets/rsi/qwen38-single-nvfp4-deep-architecture.png)
+- [深度 dashboard PNG](../assets/rsi/qwen38-single-nvfp4-deep-dashboard.png)
+- [profile analyzer](../../tools/analyze_single_nvfp4_profile.py)
 - [50 轮 sweep runner](../../tools/rsi_single_nvfp4_sweep.py)
 - [dashboard/report renderer](../../tools/render_single_nvfp4_dashboard.py)
+
+## Profile-first update：从开关扫描转为分层优化
+
+50 轮 sweep 已经回答了高层 serving 开关的边界；后续迭代改为先 profile，再决定是否改 scheduler、buffer、metadata 或 kernel。当前 MTP3 profile 的 16 个 steady GPU execute span 平均为 **6.641 ms**，相邻 GPU span 之间的 host gap 平均为 **2.598 ms**，约占 GPU execute 的 **39.1%**。因此只替换某个 GPU operator 或调整一个 backend，不能默认转化为 E2E 收益。
+
+profile 的 host gap 主要由 `prepare_inputs`、scheduler `schedule/update_from_output`、KV slot allocation、Mamba block-table metadata、UVA copy 和多次 `aten::index/copy_/to/pin_memory` 组成。GPU 侧主要热点是 NVFP4 block scaled GEMM、GDN qkvz、GDN chunked、FP4 conversion、paged attention 和 causal conv。新的 [深度 dashboard](../assets/rsi/qwen38-single-nvfp4-deep-dashboard.png) 将这两条证据链放在同一张图里；[深度报告](qwen38-single-nvfp4-deep-results.md) 记录每轮具体改动、吞吐、acceptance、覆盖率和晋级/拒绝理由。
+
+当前 profile 驱动候选是 BF16 recurrent state + aligned cache。它在 2-task/36-request replay 中达到 **250.491 tok/s**，在 4-task/89-request sustained replay 中达到 **358.375 tok/s**；同 workload baseline 是 **339.991 tok/s**。这说明 300 tok/s 已在 sustained workload 上达到，但短 replay 仍为 **250.491 tok/s**，不能把两种 workload 合并成一个结论。D11 还没有在 clean vLLM-only 环境完成复核和独立 GSM8K 重跑，所以它保持 opt-in candidate。
+
+算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；FP8 qkvz、GDN stage tuning、fused metadata 和 pinned copy pool 都没有同时降低 profile bottleneck 与 E2E；一个 FP4 tactic 峰值受 acceptance 变化干扰，归因无效。失败实验不会删除，它们是下一轮避免重复试错的约束。
 
 ## 当前结论
 
@@ -94,4 +110,4 @@ Promotion 需要同时满足：
 
 本轮有意未扫 TP>1、GPU placement、多实例、DBO、`--max-num-seqs`、不同 client concurrency、KV BF16、线性 attention 的所有 cutlass/auto 组合、量化校准重做、speculative thinking budget、长尾 trace 和 clean vLLM-only env。它们不是“已验证无收益”，只是当前 scope 的 omission。
 
-下一轮应先做两件事：在 clean vLLM-only 环境复核 MTP=3/MTP=4，并用 concurrency 1/2/4/8 加长 trace 检查 +0.89% 是否仍存在；如果稳定，再针对 GDN/attention metadata 做 profiler-driven kernel task。任何新的知识条目都要附适用 hardware、shape、version、command 和 evidence path。
+下一轮应先做三件事：在 clean vLLM-only 环境复核 D0/D3/D10/D11；针对 `prepare_inputs`、scheduler metadata、`mamba_get_block_table_tensor` 和 UVA copy 做 buffer reuse、批量 metadata 和 graph-safe persistent buffer 对照；针对 NVFP4 decode、GDN qkvz small decode、GDN postconv 和 FP4 conversion 做真实 decode shape 的 microbenchmark。任何新的知识条目都要附适用 hardware、shape、version、command 和 evidence path，并同时更新 CPU gap、kernel time、replay coverage 和 GSM8K gate。

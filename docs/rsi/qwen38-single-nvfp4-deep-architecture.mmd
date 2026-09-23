@@ -1,0 +1,36 @@
+flowchart LR
+    CLI[Codex CLI experiment loop] --> TRACE[AgentBench trace mode<br/>codex_swebenchpro]
+    TRACE --> REPLAY[AgentInfer exact replay<br/>task/request/calibration gate]
+    REPLAY --> API[vLLM OpenAI server<br/>TP1 · MTP · FP8 KV]
+
+    subgraph SERVE[vLLM serving layers]
+        API --> L0[Engine / API<br/>tokenizer · metrics]
+        L0 --> L1[Scheduler<br/>async · chunked prefill]
+        L1 --> L2[Model runner<br/>CUDA graphs · input prep]
+        L2 --> L3[Hybrid Qwen3.8<br/>full attention + GDN]
+        L3 --> L4[Operator dispatch<br/>NVFP4 GEMM · GDN · attention]
+        L4 --> GPU[1 × B300 SM103]
+    end
+
+    GPU --> EXEC[torch profiler GPU execute spans]
+    L0 --> HOST[torch profiler host spans]
+    L1 --> HOST
+    L2 --> HOST
+    HOST --> BUBBLE[CPU bubble ledger<br/>prepare_inputs · schedule<br/>metadata · UVA copies]
+    EXEC --> HOTSPOT[operator ledger<br/>FP4 GEMM · qkvz · GDN<br/>conversion · postconv]
+    BUBBLE --> ORACLE[profile-driven hypothesis gate]
+    HOTSPOT --> ORACLE
+    ORACLE --> MICRO[shape correctness + microbench]
+    MICRO --> REPLAY
+    REPLAY --> QUALITY[GSM8K quality gate<br/>parsed · correct · errors]
+    QUALITY --> KB[knowledge base<br/>dashboard · architecture<br/>next layer hypothesis]
+    KB --> CLI
+
+    classDef control fill:#e8f1e8,stroke:#5d9b6f,color:#253238;
+    classDef serve fill:#eaf1ff,stroke:#6b8fd6,color:#253238;
+    classDef evidence fill:#fff4df,stroke:#c58b2c,color:#253238;
+    classDef gate fill:#fbe8e8,stroke:#c46a6a,color:#253238;
+    class CLI,TRACE,REPLAY,KB control;
+    class API,L0,L1,L2,L3,L4,GPU serve;
+    class EXEC,HOST,BUBBLE,HOTSPOT,MICRO,QUALITY evidence;
+    class ORACLE gate;

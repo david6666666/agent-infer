@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-23",
+  "scope": "single B300, TP1, Inferact/Qwen3.8-27B-NVFP4",
+  "target": {
+    "output_tokens_per_second": 300,
+    "interpretation": "The target is evaluated separately for the short fixed replay and the longer sustained replay; a pass on the latter must not be presented as a pass on the former."
+  },
+  "contract": {
+    "model": "Inferact/Qwen3.8-27B-NVFP4",
+    "snapshot": "6128240ebaf4eaa7bad2b3d1c72c37d677c5f462",
+    "gpu": "1 x NVIDIA B300 SXM6 AC, SM103, CUDA 13.0",
+    "tensor_parallel": 1,
+    "max_model_len": 262144,
+    "kv_cache_dtype": "fp8",
+    "reasoning_parser": "qwen3",
+    "tool_call_parser": "qwen3_xml",
+    "auto_tool_choice": true,
+    "workload": "AgentBench trace mode codex_swebenchpro through AgentInfer replay",
+    "seed": 228,
+    "short_replay": "2 tasks, 36 requests, client concurrency 8",
+    "sustained_replay": "4 tasks, 89 requests, client concurrency 8",
+    "quality": "vLLM OpenAI API GSM8K test split, 1319 rows, temperature 0, seed 42, concurrency 8"
+  },
+  "profile": {
+    "trace": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/deep-profile-cpu-stack-mtp3-c8/production/torch/rank0.1790199683383111582.pt.trace.json",
+    "analysis": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/deep-profile-cpu-stack-mtp3-c8/production/torch/profile-analysis.json",
+    "steady_gpu_annotations": 16,
+    "gpu_execute_mean_ms": 6.64086925,
+    "gpu_execute_median_ms": 6.539181,
+    "cpu_gap_mean_ms": 2.597702539,
+    "cpu_gap_median_ms": 2.589806641,
+    "cpu_gap_min_ms": 2.55393457,
+    "cpu_gap_max_ms": 2.661679688,
+    "cpu_gap_to_gpu_mean_ratio": 0.391153,
+    "python_callsite_aggregate_ms": [
+      {
+        "name": "model_runner.py:1159 prepare_inputs",
+        "total_ms": 4.982798,
+        "count": 14,
+        "mean_per_event_ms": 0.355914
+      },
+      {
+        "name": "scheduler.py:501 schedule",
+        "total_ms": 4.705044,
+        "count": 15,
+        "mean_per_event_ms": 0.31367
+      },
+      {
+        "name": "scheduler.py:1802 update_from_output",
+        "total_ms": 2.145331,
+        "count": 15,
+        "mean_per_event_ms": 0.143022
+      },
+      {
+        "name": "kv_cache_manager.py:343 allocate_slots",
+        "total_ms": 1.996226,
+        "count": 30,
+        "mean_per_event_ms": 0.066541
+      },
+      {
+        "name": "model_runner.py:1012 add_requests",
+        "total_ms": 1.960914,
+        "count": 14,
+        "mean_per_event_ms": 0.140065
+      },
+      {
+        "name": "sampler.py:96 apply_staged_writes",
+        "total_ms": 1.939424,
+        "count": 14,
+        "mean_per_event_ms": 0.13853
+      },
+      {
+        "name": "buffer_utils.py:108 copy_to_uva",
+        "total_ms": 1.872093,
+        "count": 224,
+        "mean_per_event_ms": 0.008357
+      },
+      {
+        "name": "attention/backends/utils.py:1131 mamba_get_block_table_tensor",
+        "total_ms": 1.406887,
+        "count": 13,
+        "mean_per_event_ms": 0.108222
+      },
+      {
+        "name": "buffer_utils.py:71 copy_to_uva",
+        "total_ms": 1.271949,
+        "count": 224,
+        "mean_per_event_ms": 0.005678
+      },
+      {
+        "name": "buffer_utils.py:26 async_copy_to_gpu",
+        "total_ms": 1.271176,
+        "count": 42,
+        "mean_per_event_ms": 0.030266
+      }
+    ],
+    "torch_op_aggregate_ms": [
+      {"name": "aten::index", "total_ms": 1.198628, "count": 62},
+      {"name": "aten::copy_", "total_ms": 1.112212, "count": 329},
+      {"name": "aten::to", "total_ms": 0.885004, "count": 187},
+      {"name": "aten::_to_copy", "total_ms": 0.774618, "count": 168},
+      {"name": "aten::pin_memory", "total_ms": 0.641424, "count": 55},
+      {"name": "aten::sum", "total_ms": 0.606279, "count": 148},
+      {"name": "aten::arange", "total_ms": 0.430789, "count": 50},
+      {"name": "aten::fill_", "total_ms": 0.349355, "count": 117}
+    ],
+    "cuda_runtime_aggregate_ms": [
+      {"name": "cudaLaunchKernel", "total_ms": 0.657651, "count": 185},
+      {"name": "cudaMemcpyAsync", "total_ms": 0.593938, "count": 122},
+      {"name": "cudaEventQuery", "total_ms": 0.163934, "count": 110},
+      {"name": "cudaGraphLaunch", "total_ms": 0.095798, "count": 3}
+    ],
+    "kernel_hotspots_ms": [
+      {"layer": "NVFP4 blockscaled GEMM prefill", "total_ms": 86.205, "count": 416},
+      {"layer": "GDN qkvz nvjet", "total_ms": 55.129, "count": 52},
+      {"layer": "NVFP4 blockscaled GEMM decode", "total_ms": 43.416, "count": 3328},
+      {"layer": "GDN qkvz nvjet small decode", "total_ms": 27.158, "count": 72},
+      {"layer": "GDN qkvz nvjet projection", "total_ms": 21.759, "count": 768},
+      {"layer": "GDN chunked gated delta net", "total_ms": 19.369, "count": 96},
+      {"layer": "FP4 conversion", "total_ms": 16.920, "count": 1152},
+      {"layer": "paged full attention", "total_ms": 15.181, "count": 34},
+      {"layer": "index_copy", "total_ms": 11.404, "count": 192},
+      {"layer": "elementwise copy", "total_ms": 10.544, "count": 576},
+      {"layer": "causal conv1d", "total_ms": 9.623, "count": 96}
+    ],
+    "operator_observations": [
+      "The production NVFP4 prefill tactic is already the fastest of the tested large-M shapes; simple tile promotion was rejected.",
+      "The fixed 128-thread GDN post-conv candidate passed correctness but was slower than the 256-thread production kernel in the direct microbenchmark.",
+      "BF16 recurrent state lowered the profiled GDN post-conv group from about 9.814 ms to 9.095 ms over the measured window, but did not remove the host gap.",
+      "The pinned host-copy pool reduced the pin_memory operator aggregate but increased the Python copy path and did not reduce the end-to-end CPU gap; it is rejected.",
+      "The fused FlashInfer metadata hook did not reduce the worker gap; it is rejected as a default change.",
+      "The FP4 tactic peak was confounded by speculative acceptance changes and was not promoted as an operator win."
+    ]
+  },
+  "iterations": [
+    {
+      "id": "D0",
+      "layer": "control",
+      "profile": "MTP3 baseline, short replay",
+      "change": "User serving contract with MTP=3; no implementation change.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 238.106329,
+      "delta_vs_workload_baseline_pct": 0.0,
+      "acceptance_length": 3.034881,
+      "prefix_cache_hit_rate": 0.894125,
+      "coverage": "36/36, residual 0",
+      "decision": "control"
+    },
+    {
+      "id": "D1",
+      "layer": "hybrid model / recurrent state",
+      "profile": "GDN state BF16",
+      "change": "Use BF16 for the recurrent GDN state cache while keeping the production CUDA kernels.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 244.601345,
+      "delta_vs_workload_baseline_pct": 2.727,
+      "acceptance_length": 3.229172,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "decision": "repeat; quality passed"
+    },
+    {
+      "id": "D2",
+      "layer": "hybrid model / recurrent state",
+      "profile": "GDN state BF16 repeat",
+      "change": "Repeat D1 to separate state dtype signal from run variance.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 240.176115,
+      "delta_vs_workload_baseline_pct": 0.869,
+      "acceptance_length": 3.228501,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "decision": "keep as candidate, do not call kernel-only gain"
+    },
+    {
+      "id": "D3",
+      "layer": "hybrid model / cache layout",
+      "profile": "GDN state BF16 + aligned cache",
+      "change": "Use BF16 state with the aligned recurrent cache layout.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 250.490812,
+      "delta_vs_workload_baseline_pct": 5.201,
+      "acceptance_length": 3.289811,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "decision": "sustained replay follow-up; profile did not show gap removal"
+    },
+    {
+      "id": "D4",
+      "layer": "hybrid model / cache layout",
+      "profile": "GDN state BF16 + no alignment",
+      "change": "Remove the cache alignment to isolate the layout contribution.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 248.745527,
+      "delta_vs_workload_baseline_pct": 4.469,
+      "acceptance_length": 3.233270,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "decision": "alignment signal is small; retain only with longer workload"
+    },
+    {
+      "id": "D5",
+      "layer": "GDN operators",
+      "profile": "FP8 qkvz + GDN prefill stage tuning",
+      "change": "Use lazy FP8 qkvz projection and reduce selected FlashInfer GDN prefill pipeline stages.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 242.779198,
+      "delta_vs_workload_baseline_pct": 1.963,
+      "acceptance_length": 3.054738,
+      "prefix_cache_hit_rate": 0.894125,
+      "coverage": "36/36, residual 0",
+      "gsm8k": "1205/1319, 91.36%, errors 0",
+      "decision": "reject for E2E; retain micro/profile evidence"
+    },
+    {
+      "id": "D6",
+      "layer": "GDN qkvz operator",
+      "profile": "lazy FP8 qkvz projection",
+      "change": "Per-tensor FP8 weights and dynamic FP8 activations for small decode qkvz shapes.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 241.210600,
+      "delta_vs_workload_baseline_pct": 1.303,
+      "acceptance_length": 3.022730,
+      "prefix_cache_hit_rate": 0.894125,
+      "coverage": "36/36, residual 0",
+      "gsm8k": "1207/1319, 91.51%, errors 0",
+      "decision": "reject; dispatch/quantization overhead dominates this workload"
+    },
+    {
+      "id": "D7",
+      "layer": "attention metadata",
+      "profile": "fused FlashInfer TRTLLM_GEN metadata",
+      "change": "Skip redundant draft metadata re-plan when the backend reads mutable GPU buffers.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 245.268990,
+      "delta_vs_workload_baseline_pct": 3.007,
+      "acceptance_length": 3.684180,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "GPU execute 7.022 ms vs 7.002 ms baseline; CPU gap 3.209 ms vs 3.193 ms baseline",
+      "decision": "reject; no host-gap reduction"
+    },
+    {
+      "id": "D8",
+      "layer": "CPU copy path",
+      "profile": "pinned async-copy pool",
+      "change": "Reuse a bounded pinned host buffer pool for async model-runner copies.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 248.352700,
+      "delta_vs_workload_baseline_pct": 4.304,
+      "acceptance_length": null,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "pin_memory aggregate 0.641 ms to 0.239 ms, but CPU gap 2.598 ms to 2.605 ms",
+      "decision": "reject; local operator reduction did not translate to overlap"
+    },
+    {
+      "id": "D9",
+      "layer": "NVFP4 operator dispatch",
+      "profile": "large-M FP4 tactic probe",
+      "change": "Force alternative blockscaled GEMM tile/tactic combinations for selected shapes.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 264.688700,
+      "delta_vs_workload_baseline_pct": 11.164,
+      "acceptance_length": 4.260700,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "persistent decode kernel was not faster; acceptance changed materially",
+      "decision": "invalid attribution; reject as an operator promotion"
+    },
+    {
+      "id": "D10",
+      "layer": "sustained control",
+      "profile": "MTP3 baseline, 4-task replay",
+      "change": "Longer replay with the user contract to expose steady-state batching behavior.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 339.991434,
+      "delta_vs_workload_baseline_pct": 0.0,
+      "acceptance_length": 3.385909,
+      "prefix_cache_hit_rate": 0.904054,
+      "coverage": "89/89, residual 0",
+      "decision": "target pass for this sustained workload"
+    },
+    {
+      "id": "D11",
+      "layer": "hybrid model / cache layout",
+      "profile": "GDN state BF16 + aligned cache, 4-task replay",
+      "change": "Carry the profile-backed recurrent-state candidate into the sustained workload.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 358.374651,
+      "delta_vs_workload_baseline_pct": 5.407,
+      "acceptance_length": 3.351752,
+      "prefix_cache_hit_rate": 0.924303,
+      "coverage": "89/89, residual 0",
+      "decision": "current sustained winner; requires clean-environment confirmation"
+    }
+  ],
+  "quality": [
+    {
+      "profile": "MTP3 baseline from 50-round gate",
+      "correct": 1195,
+      "rows": 1319,
+      "parsed": 1210,
+      "errors": 0,
+      "accuracy": 0.905990902,
+      "artifact": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/gsm8k-baseline-mtp3.jsonl"
+    },
+    {
+      "profile": "GDN state BF16",
+      "correct": 1201,
+      "rows": 1319,
+      "parsed": 1214,
+      "errors": 0,
+      "accuracy": 0.910538287,
+      "artifact": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/gsm8k-gdn-state-bf16-clean-mtp3.jsonl"
+    },
+    {
+      "profile": "GDN state BF16 + aligned cache",
+      "correct": 1199,
+      "rows": 1319,
+      "parsed": 1216,
+      "errors": 0,
+      "accuracy": 0.909021986,
+      "artifact": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/gsm8k-gdn-state-bf16-align-mtp3.jsonl"
+    },
+    {
+      "profile": "FP8 qkvz + GDN stage",
+      "correct": 1205,
+      "rows": 1319,
+      "parsed": 1221,
+      "errors": 0,
+      "accuracy": 0.913570887,
+      "artifact": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/gsm8k-combined-qkvz-gdnstage-mtp3.jsonl"
+    }
+  ]
+}

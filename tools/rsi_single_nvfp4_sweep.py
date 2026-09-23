@@ -441,8 +441,11 @@ def _server_command(
         "1",
         "--max-model-len",
         "262144",
-        "--kv-cache-dtype",
-        "fp8",
+        *(
+            ()
+            if any(arg == "--kv-cache-dtype" for arg in profile.server_args)
+            else ("--kv-cache-dtype", "fp8")
+        ),
         "--reasoning-parser",
         "qwen3",
         "--enable-auto-tool-choice",
