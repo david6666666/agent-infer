@@ -1,0 +1,38 @@
+%% Single-B300 NVFP4 dense-feedback architecture, 2026-09-23.
+flowchart LR
+    A[Codex CLI\nexperiment operator] --> B[AgentBench trace mode\ncodex_swebenchpro converter]
+    B --> C[AgentInfer replay dispatcher\n2 tasks · 36 requests · exact calibration]
+    C --> D[OpenAI-compatible vLLM API\nqwen3 reasoning · qwen3_xml tools]
+
+    subgraph VLLM["vLLM serving layers — one cold profile per round"]
+        D --> E[Engine runtime\nAPI server · tokenizer · metrics]
+        E --> F[Scheduler\nchunked prefill · batch token budget\nasync scheduling · CUDA graphs]
+        F --> G[KV/cache layer\nprefix cache · FP8 KV · paged layout]
+        G --> H[Qwen3.8 hybrid model\nfull attention + GDN/linear attention]
+        H --> I[Speculative layer\nMTP draft · verify · acceptance]
+        I --> J[Kernel dispatch\nFlashInfer/TRTLLM attention\nNVFP4 ModelOpt linear · CuTeDSL]
+    end
+
+    J --> K[1 × NVIDIA B300\nSM103 · CUDA 13.0]
+
+    E -. runtime probe .-> L[Raw evidence\nserver log · Prometheus · replay summary\nSHA256 · readiness]
+    F -. scheduler/cache counters .-> L
+    I -. drafts · accepted · mean length .-> L
+    K -. GPU/runtime facts .-> L
+    C -. coverage gate .-> M{36/36 + residual 0?}
+    M -->|no| N[Record failure\nexclude from ranking\nkeep for next hypothesis]
+    M -->|yes| O[Median/range ranking\nscreen → top-3 confirmation]
+    L --> O
+    O --> P[GSM8K quality gate\n1319 rows · temp 0 · seed 42]
+    P -->|pass| Q[Knowledge base + dashboard\npromote with scope and caveats]
+    P -->|fail| N
+    Q -. next hypothesis .-> A
+
+    classDef control fill:#e8f1e8,stroke:#5d9b6f,color:#20382a;
+    classDef layer fill:#eaf1ff,stroke:#6b8fd6,color:#1e2c4f;
+    classDef evidence fill:#fff4df,stroke:#c58b2c,color:#4f3710;
+    classDef gate fill:#fbe8e8,stroke:#c46a6a,color:#4c2020;
+    class A,B,C,D control;
+    class E,F,G,H,I,J,K layer;
+    class L,O,P,Q evidence;
+    class M,N gate;

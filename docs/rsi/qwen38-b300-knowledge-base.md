@@ -186,6 +186,17 @@ dashboard image is generated from the same ledger and the architecture image
 shows the relationship between workload, serving profiles, evidence, quality
 and the layered knowledge base.
 
+## Single-card NVFP4 follow-up
+
+The scope-specific continuation is kept in
+[qwen38-single-nvfp4-knowledge-base.md](qwen38-single-nvfp4-knowledge-base.md).
+Its [50-round result extract](qwen38-single-nvfp4-50-round-results.md),
+[layered architecture source](qwen38-single-nvfp4-architecture.mmd),
+[architecture PNG](../assets/rsi/qwen38-single-nvfp4-architecture.png) and
+[dashboard](../assets/rsi/qwen38-single-nvfp4-dashboard.png) use the same
+single-B300 NVFP4 ledger. This keeps the older four-B300 BF16 history intact
+while making the new model, hardware, precision and MTP scope explicit.
+
 ## Harness lessons kept out of performance ranking
 
 The first sweep attempt used the environment's pre-existing upstream `vllm`
