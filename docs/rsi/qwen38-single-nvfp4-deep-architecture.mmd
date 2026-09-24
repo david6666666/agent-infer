@@ -6,7 +6,8 @@ flowchart LR
     subgraph SERVE[vLLM serving layers]
         API --> L0[Engine / API<br/>tokenizer · metrics]
         L0 --> L1[Scheduler<br/>async · chunked prefill]
-        L1 --> L2[Model runner<br/>CUDA graphs · input prep]
+        L1 --> OUT[Output processing<br/>append · EOS · stop · length<br/>fast path opt-in]
+        OUT --> L2[Model runner<br/>CUDA graphs · input prep]
         L2 --> L3[Hybrid Qwen3.8<br/>full attention + GDN]
         L3 --> L4[Operator dispatch<br/>NVFP4 GEMM · GDN · attention]
         L4 --> GPU[1 × B300 SM103]
@@ -15,6 +16,7 @@ flowchart LR
     GPU --> EXEC[torch profiler GPU execute spans]
     L0 --> HOST[torch profiler host spans]
     L1 --> HOST
+    OUT --> HOST
     L2 --> HOST
     HOST --> BUBBLE[CPU bubble ledger<br/>prepare_inputs · schedule<br/>metadata · UVA copies]
     EXEC --> HOTSPOT[operator ledger<br/>FP4 GEMM · qkvz · GDN<br/>conversion · postconv]
@@ -31,6 +33,6 @@ flowchart LR
     classDef evidence fill:#fff4df,stroke:#c58b2c,color:#253238;
     classDef gate fill:#fbe8e8,stroke:#c46a6a,color:#253238;
     class CLI,TRACE,REPLAY,KB control;
-    class API,L0,L1,L2,L3,L4,GPU serve;
+    class API,L0,L1,OUT,L2,L3,L4,GPU serve;
     class EXEC,HOST,BUBBLE,HOTSPOT,MICRO,QUALITY evidence;
     class ORACLE gate;

@@ -113,8 +113,19 @@ def _short_rows(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def _sustained_rows(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     rows = [row for row in data["iterations"] if row["tasks"] == 4]
-    control = next(row for row in rows if row["id"] == "D10")
-    candidates = [row for row in rows if row["id"] != control["id"] and "reject" not in str(row["decision"])]
+    control = next(
+        (row for row in rows if row["id"] == "D17"),
+        next(row for row in rows if row["id"] == "D10"),
+    )
+    preferred_ids = {"D15", "D16"}
+    candidates = [row for row in rows if row["id"] in preferred_ids]
+    if not candidates:
+        candidates = [
+            row
+            for row in rows
+            if row["id"] not in {"D10", "D17"}
+            and "reject" not in str(row["decision"])
+        ]
     confirmation = dict(max(candidates, key=lambda row: row["output_tok_s"]))
     confirmation["id"] = "/".join(row["id"] for row in candidates)
     confirmation["output_tok_s"] = statistics.median(float(row["output_tok_s"]) for row in candidates)
@@ -126,7 +137,9 @@ def _sustained_candidates(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         row
         for row in data["iterations"]
-        if row["tasks"] == 4 and row["id"] != "D10" and "reject" not in str(row["decision"])
+        if row["tasks"] == 4
+        and row["id"] not in {"D10", "D17"}
+        and "reject" not in str(row["decision"])
     ]
 
 
@@ -153,7 +166,8 @@ def _draw_profile_panel(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None
         draw.rounded_rectangle((chart_x, y, chart_x + bar_w, y + 28), radius=6, fill=color)
         _text(draw, (chart_x + chart_w + 18, y + 4), f"{value:.3f}  {detail}", SMALL, color)
     _text(draw, (88, 930), "CPU gap / GPU execute = 39.1%; host work is a first-class optimization layer.", SMALL_BOLD, ORANGE)
-    _text(draw, (88, 963), "Kernel totals are aggregate over the profiled trace window, not per-token latency.", TINY, MUTED)
+    _text(draw, (88, 955), "Stop fast path profile: GPU 6.587 ms / gap 2.596 ms; gap change is inconclusive.", TINY, ORANGE)
+    _text(draw, (88, 980), "Kernel totals are aggregate over the profiled trace window, not per-token latency.", TINY, MUTED)
 
 
 def _draw_callsite_panel(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
@@ -177,6 +191,7 @@ def _draw_callsite_panel(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> Non
         ("pinned copy pool", "reject gap", RED),
         ("fused metadata", "reject gap", RED),
         ("FP4 tactic peak", "invalid attribution", RED),
+        ("stop fast path", "sustained opt-in", GREEN),
     ]
     _text(draw, (1268, 757), "Promotion ledger", SMALL_BOLD, MUTED)
     y = 792
@@ -197,9 +212,9 @@ def _draw_workload_chart(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> Non
     rows = [
         ("short control D0", float(short_control["output_tok_s"]), BLUE),
         ("short best D3", float(short_best["output_tok_s"]), GREEN),
-        ("sustained control D10", float(sustained_control["output_tok_s"]), BLUE),
-        ("sustained confirm median D11/D13", float(sustained_confirmation["output_tok_s"]), GREEN),
-        ("sustained peak D11", float(sustained_peak["output_tok_s"]), PURPLE),
+        ("sustained paired control D17", float(sustained_control["output_tok_s"]), BLUE),
+        ("sustained stop median D15/D16", float(sustained_confirmation["output_tok_s"]), GREEN),
+        ("sustained prior peak D11", float(sustained_peak["output_tok_s"]), PURPLE),
     ]
     chart_x, chart_y, chart_w = 300, 1190, 570
     max_value = 380.0
@@ -217,8 +232,8 @@ def _draw_workload_chart(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> Non
     _text(draw, (88, 1570), "Interpretation", SMALL_BOLD, MUTED)
     interpretation = [
         f"Short fixed replay: the best measured result is {float(short_best['output_tok_s']):.1f} tok/s, below target.",
-        f"Sustained replay: D11/D13 median is {float(sustained_confirmation['output_tok_s']):.1f} tok/s; peak is {float(sustained_peak['output_tok_s']):.1f}.",
-        "The sustained result is repeated, pending clean vLLM-only confirmation and GSM8K rerun.",
+        f"Sustained paired replay: D15/D16 median is {float(sustained_confirmation['output_tok_s']):.1f} tok/s vs D17 {float(sustained_control['output_tok_s']):.1f}.",
+        "The candidate is exact and fallback-free; clean vLLM-only confirmation is still required before default promotion.",
     ]
     for index, line in enumerate(interpretation):
         _text(draw, (88, 1610 + index * 34), "• " + line, TINY, INK)
@@ -238,9 +253,13 @@ def _draw_round_table(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
         x += width
     draw.line((x0, y0 + 28, 2310, y0 + 28), fill=GRID, width=1)
     rows = data["iterations"]
-    base_by_tasks = {2: next(row["output_tok_s"] for row in rows if row["id"] == "D0"), 4: next(row["output_tok_s"] for row in rows if row["id"] == "D10")}
+    sustained_control, _ = _sustained_rows(data)
+    base_by_tasks = {
+        2: next(row["output_tok_s"] for row in rows if row["id"] == "D0"),
+        4: sustained_control["output_tok_s"],
+    }
     for index, row in enumerate(rows):
-        y = y0 + 44 + index * 50
+        y = y0 + 42 + index * 34
         base = base_by_tasks[int(row["tasks"])]
         delta = (float(row["output_tok_s"]) / base - 1) * 100
         layer = str(row["layer"]).replace("hybrid model / ", "hybrid/")
@@ -248,14 +267,14 @@ def _draw_round_table(draw: ImageDraw.ImageDraw, data: dict[str, Any]) -> None:
         if len(change) > 58:
             change = change[:55] + "..."
         decision = str(row["decision"])
-        color = GREEN if row["id"] in {"D3", "D11", "D13"} else RED if "reject" in decision or "invalid" in decision else INK
+        color = GREEN if row["id"] in {"D3", "D11", "D13", "D15", "D16"} else RED if "reject" in decision or "invalid" in decision else INK
         values = [row["id"], layer[:21], change, f"{float(row['output_tok_s']):.1f}", f"{delta:+.1f}%", decision[:34]]
         x = x0
         for value, (_, width) in zip(values, headers, strict=True):
             _text(draw, (x, y), str(value), MICRO, color if value == decision[:34] else INK)
             x += width
-        draw.line((x0, y + 29, 2310, y + 29), fill="#edf1f3", width=1)
-    _text(draw, (1068, 1848), "Every row is replay-valid unless the decision explicitly says invalid attribution; raw paths and gate data are in deep-evidence.json.", TINY, MUTED)
+        draw.line((x0, y + 24, 2310, y + 24), fill="#edf1f3", width=1)
+    _text(draw, (1068, 1872), "Every row is replay-valid unless the decision explicitly says invalid attribution; raw paths and gate data are in deep-evidence.json.", TINY, MUTED)
 
 
 def render(data: dict[str, Any], output: Path) -> None:
@@ -273,7 +292,7 @@ def render(data: dict[str, Any], output: Path) -> None:
     _card(draw, (60, 235, 410, 345), "SHORT CONTROL", f"{float(short_control['output_tok_s']):.1f} tok/s", "2 tasks · 36 requests")
     _card(draw, (430, 235, 780, 345), "SHORT BEST", f"{float(short_best['output_tok_s']):.1f} tok/s", f"D3 · {short_delta:+.2f}%", value_color=GREEN)
     _card(draw, (800, 235, 1150, 345), "SUSTAINED CONTROL", f"{float(sustained_control['output_tok_s']):.1f} tok/s", "4 tasks · 89 requests")
-    _card(draw, (1170, 235, 1520, 345), "SUSTAINED CONFIRM", f"{float(sustained_best['output_tok_s']):.1f} tok/s", f"D11/D13 median · {sustained_delta:+.2f}%", value_color=GREEN)
+    _card(draw, (1170, 235, 1520, 345), "SUSTAINED CONFIRM", f"{float(sustained_best['output_tok_s']):.1f} tok/s", f"D15/D16 median · {sustained_delta:+.2f}%", value_color=GREEN)
     _card(draw, (1540, 235, 1890, 345), "CPU GAP", "2.598 ms", "39.1% of GPU execute", value_color=ORANGE)
     _card(draw, (1910, 235, 2340, 345), "GPU EXECUTE", "6.641 ms", "profile mean / iteration", value_color=BLUE)
 

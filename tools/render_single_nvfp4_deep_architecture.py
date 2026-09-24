@@ -120,7 +120,7 @@ def render(output: Path) -> None:
         "kernel": (1740, 660, 1970, 770),
     }
     _node(draw, nodes["engine"], ["Engine / API", "tokenizer · metrics"], BLUE, BLUE_EDGE)
-    _node(draw, nodes["scheduler"], ["Scheduler", "async · chunked prefill"], BLUE, BLUE_EDGE)
+    _node(draw, nodes["scheduler"], ["Scheduler", "async · chunked prefill", "stop fast path opt-in"], BLUE, BLUE_EDGE)
     _node(draw, nodes["kv"], ["KV / cache", "prefix · FP8 · paged"], BLUE, BLUE_EDGE)
     _node(draw, nodes["runner"], ["Model runner", "input prep · CUDA graph"], BLUE, BLUE_EDGE)
     _node(draw, nodes["hybrid"], ["Hybrid Qwen3.8", "attention + GDN + MTP"], BLUE, BLUE_EDGE)
@@ -142,7 +142,7 @@ def render(output: Path) -> None:
     hotspot = (535, 625, 1040, 765)
     _node(draw, profiler, ["Torch profiler", "GPU execute spans"], GOLD, GOLD_EDGE)
     _node(draw, host, ["Host stack trace", "Python + torch ops"], GOLD, GOLD_EDGE)
-    _node(draw, bubble, ["CPU bubble ledger", "prepare_inputs · scheduler", "metadata · UVA copies"], GOLD, GOLD_EDGE)
+    _node(draw, bubble, ["CPU bubble ledger", "prepare_inputs · scheduler", "output checks · metadata · UVA"], GOLD, GOLD_EDGE)
     _node(draw, hotspot, ["Operator ledger", "FP4 GEMM · qkvz · GDN", "conversion · postconv"], GOLD, GOLD_EDGE)
     _arrow(draw, (1275, 770), (470, 490), GOLD_EDGE, dashed=True)
     _arrow(draw, (1275, 770), (470, 695), GOLD_EDGE, dashed=True)
@@ -173,7 +173,7 @@ def render(output: Path) -> None:
     draw.text((85, 1240), "Inferact/Qwen3.8-27B-NVFP4 · TP1 · max-model-len 262144 · FP8 KV · qwen3/qwen3_xml · prefix cache · AgentBench codex_swebenchpro · B300", font=SMALL, fill=INK)
     draw.text((85, 1280), "Short replay: 2 tasks / 36 requests. Sustained replay: 4 tasks / 89 requests. The 300 tok/s target is reported separately for each workload.", font=SMALL, fill=INK)
     draw.text((85, 1320), "Blue = serving/GPU layers   Gold = profile/evidence   Red = hypothesis/rejection gate   Green = orchestration and promoted knowledge", font=SMALL, fill=MUTED)
-    draw.text((85, 1360), "Current next layer: persistent metadata and input buffers to reduce the measured ~2.60 ms host gap; D11 remains opt-in pending clean-environment quality confirmation.", font=SMALL, fill=ORANGE)
+    draw.text((85, 1360), "Current candidate: scheduler output stop fast path + BF16/aligned state; measured host gap remains ~2.60 ms, so clean confirmation is required before promotion.", font=SMALL, fill=ORANGE)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     image.save(output)

@@ -1,11 +1,19 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-23",
+  "generated_at": "2026-09-24",
   "scope": "single B300, TP1, Inferact/Qwen3.8-27B-NVFP4",
   "target": {
     "output_tokens_per_second": 300,
     "interpretation": "The target is evaluated separately for the short fixed replay and the longer sustained replay; a pass on the latter must not be presented as a pass on the former.",
     "sustained_confirmation": {
+      "candidate": "scheduler output stop fast path + BF16 state + aligned cache",
+      "candidate_runs_tok_s": [355.287594, 353.849012],
+      "median_tok_s": 354.568303,
+      "baseline_tok_s": 338.470634,
+      "delta_vs_baseline_pct": 4.756,
+      "all_runs_coverage": "89/89, residual 0"
+    },
+    "prior_aligned_cache_confirmation": {
       "candidate_runs_tok_s": [358.374651, 347.045683],
       "median_tok_s": 352.710167,
       "baseline_tok_s": 339.991434,
@@ -138,8 +146,26 @@
       "The pinned host-copy pool reduced the pin_memory operator aggregate but increased the Python copy path and did not reduce the end-to-end CPU gap; it is rejected.",
       "The CUDA-event-guarded depth-2 input-copy ring hit 7936 worker calls and reused 11 allocations, but the CPU gap moved from about 2.598 ms to 2.602 ms and E2E throughput fell; it is rejected.",
       "The fused FlashInfer metadata hook did not reduce the worker gap; it is rejected as a default change.",
-      "The FP4 tactic peak was confounded by speculative acceptance changes and was not promoted as an operator win."
-    ]
+      "The FP4 tactic peak was confounded by speculative acceptance changes and was not promoted as an operator win.",
+      "Nsight Compute on the production-size qkvz GEMM measured 852.672 us with 255 registers/thread, 214.304 KiB shared memory/block, 97.861% SM throughput and 97.792% tensor-pipe activity; the large projection is compute-saturated rather than a cheap tile-switch target.",
+      "The scheduler stop fast path had 100% fast-path coverage and improved the paired sustained replay, but its profile CPU gap stayed 2.596 ms versus 2.598 ms; keep it opt-in until a clean vLLM-only rerun explains the E2E delta.",
+      "The block-boundary cache guard skipped 15461 of 15616 cache bookkeeping calls yet produced 330.397 tok/s versus the 338.471 tok/s aligned control; skip-rate alone is not a promotion signal.",
+      "Caching Mamba aligned offsets hit 14334 of 14336 calls but produced 249.711 tok/s; prepare_inputs NumPy scratch reuse hit 3904 calls and produced 246.586 tok/s. Both are rejected as E2E optimizations."
+    ],
+    "stop_fastpath_profile": {
+      "trace": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/deep-profile-stop-fastpath-mtp3-c8/production/torch/rank0.1790215979780393047.pt.trace.json",
+      "analysis": "/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/deep-profile-stop-fastpath-mtp3-c8/production/torch/profile-analysis.json",
+      "steady_gpu_annotations": 16,
+      "gpu_execute_mean_ms": 6.586869,
+      "gpu_execute_median_ms": 6.543453,
+      "cpu_gap_mean_ms": 2.595936,
+      "cpu_gap_median_ms": 2.583087,
+      "prepare_inputs_total_ms": 4.330953,
+      "schedule_total_ms": 4.780960,
+      "update_from_output_total_ms": 2.045601,
+      "async_scheduler_update_total_ms": 0.763875,
+      "comparison": "Compared with the original 6.640869 ms GPU execute and 2.597703 ms CPU gap profile; the total gap is statistically unchanged, so the sustained E2E improvement is retained as a paired result but not attributed solely to bubble removal."
+    }
   },
   "iterations": [
     {
@@ -342,6 +368,110 @@
       "prefix_cache_hit_rate": 0.924303,
       "coverage": "89/89, residual 0",
       "decision": "confirmation pass; sustained target remains above 300"
+    },
+    {
+      "id": "D14",
+      "layer": "scheduler / output processing",
+      "profile": "stop fast path, short replay",
+      "change": "Inline EOS, stop-token and length checks for ordinary non-pooling requests while preserving the original fallback path for stale, pooled or repetition-detection requests.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 245.118457,
+      "delta_vs_workload_baseline_pct": 2.945,
+      "acceptance_length": 3.300251,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "fast path 3392/3392 calls, fallback 0; short throughput remains below the D3 cache-layout result",
+      "decision": "short replay reject; carry to sustained paired test"
+    },
+    {
+      "id": "D15",
+      "layer": "scheduler / output processing",
+      "profile": "stop fast path, sustained replay",
+      "change": "Run D14 with BF16 state + aligned cache on the 4-task/89-request replay.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 355.287594,
+      "delta_vs_workload_baseline_pct": 4.969,
+      "acceptance_length": 3.299426,
+      "prefix_cache_hit_rate": 0.924303,
+      "coverage": "89/89, residual 0",
+      "profile_effect": "fast path 15488/15488 calls, fallback 0; 99 stop events",
+      "decision": "paired sustained candidate pass"
+    },
+    {
+      "id": "D16",
+      "layer": "scheduler / output processing",
+      "profile": "stop fast path, sustained repeat",
+      "change": "Repeat D15 with the same trace, serving contract and client concurrency.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 353.849012,
+      "delta_vs_workload_baseline_pct": 4.543,
+      "acceptance_length": 3.355295,
+      "prefix_cache_hit_rate": 0.924303,
+      "coverage": "89/89, residual 0",
+      "profile_effect": "fast path 15296/15296 calls, fallback 0; 99 stop events",
+      "decision": "confirmation pass; median 354.568 tok/s"
+    },
+    {
+      "id": "D17",
+      "layer": "sustained control",
+      "profile": "BF16 state + aligned cache, no stop fast path",
+      "change": "Same sustained contract as D15/D16 with the scheduler output path unmodified.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 338.470634,
+      "delta_vs_workload_baseline_pct": 0.0,
+      "acceptance_length": 3.331914,
+      "prefix_cache_hit_rate": 0.924303,
+      "coverage": "89/89, residual 0",
+      "decision": "paired control for D15/D16"
+    },
+    {
+      "id": "D18",
+      "layer": "scheduler / KV cache bookkeeping",
+      "profile": "block-boundary cache guard, sustained replay",
+      "change": "Call cache_blocks only when finalized tokens cross a scheduler block boundary; preserve reset handling on backward progress.",
+      "tasks": 4,
+      "requests": 89,
+      "output_tok_s": 330.397163,
+      "delta_vs_workload_baseline_pct": -2.385,
+      "acceptance_length": 3.280344,
+      "prefix_cache_hit_rate": 0.924303,
+      "coverage": "89/89, residual 0",
+      "profile_effect": "15461/15616 cache bookkeeping calls skipped; 155 cache calls remained",
+      "decision": "reject; fewer calls did not improve E2E"
+    },
+    {
+      "id": "D19",
+      "layer": "attention metadata",
+      "profile": "aligned Mamba offset tensor cache, short replay",
+      "change": "Cache only the invariant GPU arange offsets in mamba_get_block_table_tensor; retain production arithmetic and gather.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 249.711126,
+      "delta_vs_workload_baseline_pct": 4.874,
+      "acceptance_length": 3.264130,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "14334/14336 offset-cache hits; one allocation",
+      "decision": "reject; no E2E gain over D3"
+    },
+    {
+      "id": "D20",
+      "layer": "model runner / prepare_inputs",
+      "profile": "NumPy scratch reuse, short replay",
+      "change": "Reuse fully overwritten cu-logits, query-start, sequence-length and no-draft arange scratch arrays.",
+      "tasks": 2,
+      "requests": 36,
+      "output_tok_s": 246.586437,
+      "delta_vs_workload_baseline_pct": 3.561,
+      "acceptance_length": 3.336059,
+      "prefix_cache_hit_rate": 0.918610,
+      "coverage": "36/36, residual 0",
+      "profile_effect": "3904 prepare calls; 7750 empty hits, 3903 zero hits, 56 arange hits; CPU allocation path did not translate to E2E",
+      "decision": "reject; keep as measurement evidence"
     }
   ],
   "quality": [

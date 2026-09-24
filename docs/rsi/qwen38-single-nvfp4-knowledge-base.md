@@ -14,6 +14,8 @@
 - [深度架构图源文件](qwen38-single-nvfp4-deep-architecture.mmd)
 - [深度架构图 PNG](../assets/rsi/qwen38-single-nvfp4-deep-architecture.png)
 - [深度 dashboard PNG](../assets/rsi/qwen38-single-nvfp4-deep-dashboard.png)
+- [scheduler stop fast path probe](../../tools/experimental_scheduler_stop_fastpath_sitecustomize/sitecustomize.py)
+- [CPU bubble/stage measurement probes](../../tools/experimental_cpu_bubble_sitecustomize/sitecustomize.py)
 - [profile analyzer](../../tools/analyze_single_nvfp4_profile.py)
 - [50 轮 sweep runner](../../tools/rsi_single_nvfp4_sweep.py)
 - [dashboard/report renderer](../../tools/render_single_nvfp4_dashboard.py)
@@ -24,13 +26,13 @@
 
 profile 的 host gap 主要由 `prepare_inputs`、scheduler `schedule/update_from_output`、KV slot allocation、Mamba block-table metadata、UVA copy 和多次 `aten::index/copy_/to/pin_memory` 组成。GPU 侧主要热点是 NVFP4 block scaled GEMM、GDN qkvz、GDN chunked、FP4 conversion、paged attention 和 causal conv。新的 [深度 dashboard](../assets/rsi/qwen38-single-nvfp4-deep-dashboard.png) 将这两条证据链放在同一张图里；[深度报告](qwen38-single-nvfp4-deep-results.md) 记录每轮具体改动、吞吐、acceptance、覆盖率和晋级/拒绝理由。
 
-当前 profile 驱动候选是 BF16 recurrent state + aligned cache。它在 2-task/36-request replay 中达到 **250.491 tok/s**，在 4-task/89-request sustained replay 中两次达到 **358.375/347.046 tok/s**，中位数 **352.710 tok/s**；同 workload baseline 是 **339.991 tok/s**，中位数相对提升 **+3.74%**。这说明 300 tok/s 已在 sustained workload 上重复达到，但短 replay 仍为 **250.491 tok/s**，不能把两种 workload 合并成一个结论。D11/D13 仍需 clean vLLM-only 复核和独立 GSM8K 重跑，所以保持 opt-in candidate。
+当前 profile 驱动候选分成两层：BF16 recurrent state + aligned cache 是模型/cache 层基础，scheduler output stop fast path 是新的 CPU 层候选。后者在同一 BF16/aligned contract 的 4-task/89-request replay 中两次达到 **355.288/353.849 tok/s**，median **354.568 tok/s**；paired control 是 **338.471 tok/s**，相对提升 **+4.76%**。短 replay 的 stop fast path 只有 **245.118 tok/s**，而 D3 仍为 **250.491 tok/s**，所以 300 tok/s 只在 sustained workload 上通过。profile 中 CPU gap 仍为 **2.596 ms**，接近 control **2.598 ms**，stop fast path 先保持 opt-in，等待 clean vLLM-only 和 per-stage timer 复核。
 
-算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；FP8 qkvz、GDN stage tuning、fused metadata、pinned copy pool 和带 CUDA event 的 GPU/pinned input ring 都没有同时降低 profile bottleneck 与 E2E；一个 FP4 tactic 峰值受 acceptance 变化干扰，归因无效。D12 的 ring 确实命中 7,936 次 worker copy、复用 11 个 allocation，但 CPU gap 仍约 2.602 ms，说明 allocator reuse 没有改变调用拓扑。失败实验不会删除，它们是下一轮避免重复试错的约束。
+算子和 CPU 实验的结果也写入知识库：固定 128-thread 的 GDN post-conv 通过 correctness 但比生产 256-thread kernel 慢；Nsight Compute 显示生产尺寸 qkvz GEMM 为 852.672 us、SM throughput 97.861%、tensor activity 97.792%，大 projection 已接近计算饱和；FP8 qkvz、GDN stage tuning、fused metadata、pinned copy pool 和带 CUDA event 的 GPU/pinned input ring 都没有同时降低 profile bottleneck 与 E2E。D12 的 ring 确实命中 7,936 次 worker copy、复用 11 个 allocation，但 CPU gap 仍约 2.602 ms，说明 allocator reuse 没有改变调用拓扑。D18 跳过 99.0% 的 cache bookkeeping 仍降到 330.397 tok/s；D19/D20 的 metadata offset/scratch 命中也没有带来 E2E 晋级。失败实验不会删除，它们是下一轮避免重复试错的约束。
 
 ## 当前结论
 
-在 NVIDIA B300 单卡、TP1、`Inferact/Qwen3.8-27B-NVFP4`、max-model-len 262144、FP8 KV、prefix cache、Codex SWE-bench Pro trace、AgentInfer concurrency 2 的固定 contract 下，MTP=4 是 50 轮中唯一完成 confirmation 且通过 GSM8K 的 winner：confirmation median 为 **248.928 output tok/s**，用户给定 MTP=3 baseline median 为 **246.732 output tok/s**，相对提升 **+0.89%**。
+在 NVIDIA B300 单卡、TP1、`Inferact/Qwen3.8-27B-NVFP4`、max-model-len 262144、FP8 KV、prefix cache、Codex SWE-bench Pro trace 下，50 轮的 AgentInfer concurrency 2 结论仍是 MTP=4 confirmation median **248.928 output tok/s**，相对 MTP=3 baseline median **+0.89%**；profile 深迭代使用 client concurrency 8 的 2-task/4-task replay，不能把两套数字混为一个 winner。
 
 同一 GSM8K test split、temperature 0、seed 42、concurrency 8 下，MTP=3 baseline 为 **1195/1319 = 90.60%**，MTP=4 为 **1202/1319 = 91.13%**；两者请求错误均为 0。当前结论是“可在这组 contract 上继续使用 MTP=4”，不是对所有 context、并发、模型版本或机器的普遍承诺。
 
@@ -58,9 +60,9 @@ profile 的 host gap 主要由 `prepare_inputs`、scheduler `schedule/update_fro
 | Hardware | 1 × NVIDIA B300 SXM6 AC，约 267.7 GiB，CUDA 13.0，driver 610.43.02 |
 | Software | Python 3.12，vLLM 0.29.0，FlashInfer 0.6.18，Transformers 5.14.1，compressed-tensors 0.17.0 |
 | Serving | TP1，max-model-len 262144，FP8 KV，qwen3 reasoning parser，qwen3_xml tool parser，auto tool choice |
-| Workload | AgentBench trace mode `codex_swebenchpro`，相同 converted trace，seed 228，2 tasks/36 requests，client concurrency 2 |
+| Workload | 50 轮：2 tasks/36 requests，client concurrency 2；深度 profile：short 2 tasks/36 requests、sustained 4 tasks/89 requests，client concurrency 8 |
 | Correctness | exact prompt calibration residual 0，planned=successful=36，failed requests=0 |
-| Ranking | replay-valid runs only；baseline 和候选均使用 median，screening 2 次，top-3 confirmation 5 次 |
+| Ranking | replay-valid runs only；同 workload 对照；50 轮 baseline/候选使用 median，深度轮次记录 paired control、profile gap、kernel evidence 与 E2E |
 | Quality | vLLM OpenAI API GSM8K test 1319 rows，temperature 0，seed 42，max_tokens 1024，concurrency 8 |
 
 每一轮都保存 server command、replay config、summary、replay-execution、Prometheus start/end、replay log、server log、runtime probe 和 SHA256。ledger 在实验主机的 `/home/zjy/code/david/tmp/rsi-single-nvfp4-20260923/rsi-real/experiments.jsonl`；仓库中的 markdown 和 PNG 是由 renderer 从 ledger 生成的可审阅摘要。
@@ -76,8 +78,10 @@ profile 的 host gap 主要由 `prepare_inputs`、scheduler `schedule/update_fro
 | Linear kernels | `--linear-backend flashinfer_cutedsl` | first startup autotune、steady-state E2E | confirmation median 246.037，低于 MTP=4 | 保留 autotune cache；做 shape-level microbench 后再改 kernel |
 | Attention | `--attention-backend TRITON_ATTN` | attention path latency、MTP metadata | 约 41 tok/s，明确负向；acceptance 未同步下降 | 不推广；如要修复需先做 attention metadata/profile |
 | Scheduler | batch tokens 8192/32768/65536 | coverage、TTFT、output tok/s | screening 约 236.8–246.4；confirmation 32768 低于 baseline | 用更宽并发矩阵再评估，当前不组合 |
+| Scheduler output | inline ordinary-request stop checks | `update_from_output`、CPU gap、sustained tok/s | D15/D16 median 354.568 vs D17 338.471；profile gap 2.596 vs 2.598 ms | opt-in；clean rerun + stage timer 后再 promotion |
 | Runtime | async off、enforce eager | host overlap、CUDA graph/compile | async off 约 238；enforce eager 约 72 | 保留默认 async/graphs |
 | KV/cache | prefix cache off | prefix hit rate、prefill cost、E2E | 关闭后约 136 tok/s，acceptance 仍约 3.3 | prefix cache 是必须保留的 serving contract |
+| Metadata/buffer | block-boundary cache guard、offset cache、prepare scratch | cache-call/array hit、CPU gap、E2E | 命中率高但 D18 330.397、D19 249.711、D20 246.586，均 reject | 先做 lifetime/graph-safe 批量设计，再测 E2E |
 | Numerical | FP8 KV、NVFP4 weights | GSM8K parsed/correct、NaN/q-scale warnings | 本轮固定 FP8 KV；日志提示 q scaling 未校准，需持续质量 gate | clean env + accuracy/regression matrix |
 
 ## 迭代协议
@@ -110,4 +114,4 @@ Promotion 需要同时满足：
 
 本轮有意未扫 TP>1、GPU placement、多实例、DBO、`--max-num-seqs`、不同 client concurrency、KV BF16、线性 attention 的所有 cutlass/auto 组合、量化校准重做、speculative thinking budget、长尾 trace 和 clean vLLM-only env。它们不是“已验证无收益”，只是当前 scope 的 omission。
 
-下一轮应先做三件事：在 clean vLLM-only 环境复核 D0/D3/D10/D11/D13；针对 `prepare_inputs`、scheduler metadata、`mamba_get_block_table_tensor` 和 UVA copy 做 buffer reuse、批量 metadata 和 graph-safe persistent buffer 对照；针对 NVFP4 decode、GDN qkvz small decode、GDN postconv 和 FP4 conversion 做真实 decode shape 的 microbenchmark。任何新的知识条目都要附适用 hardware、shape、version、command 和 evidence path，并同时更新 CPU gap、kernel time、replay coverage 和 GSM8K gate。
+下一轮应先做三件事：在 clean vLLM-only 环境复核 D3/D15/D16/D17 及 short replay；给 stop fast path、`prepare_inputs`、scheduler metadata 和 UVA copy 增加不带 profiler 的 per-stage timer，验证 wall-clock、CPU gap、launch/copy 数量是否同向；针对 NVFP4 decode、GDN qkvz small decode、GDN postconv 和 FP4 conversion 做真实 decode shape 的 microbenchmark。任何新的知识条目都要附适用 hardware、shape、version、command 和 evidence path，并同时更新 CPU gap、kernel time、replay coverage 和 GSM8K gate。
