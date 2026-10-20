@@ -23,7 +23,8 @@ AgentInfer 为智能体工作流提供缓存管理和请求调度能力，可集
 
 [文档导航](docs/README.md) · [快速开始](docs/zh/tutorial/01-quick-start.md) ·
 [vLLM 接入](docs/zh/how-to/integrate-vllm.md) · [基准测试指南](docs/zh/how-to/run-benchmark.md) ·
-[AgentRouter WASM affinity + native 补丁](agentinfer/agentrouter/README.md) · [变更日志](CHANGELOG.md)
+[AgentRouter WASM affinity + native 补丁](agentinfer/agentrouter/README.md) ·
+[InferRSI 工作台](docs/zh/reference/inferrsi.md) · [变更日志](CHANGELOG.md)
 
 ## 环境要求
 

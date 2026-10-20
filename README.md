@@ -23,7 +23,8 @@ AgentInfer manages caches and schedules agent workflow requests in or in front o
 
 [Documentation](docs/README.md) · [Quick start](docs/en/tutorial/01-quick-start.md) ·
 [vLLM integration](docs/en/how-to/integrate-vllm.md) · [Benchmark guide](docs/en/how-to/run-benchmark.md) ·
-[AgentRouter WASM affinity + native patch](agentinfer/agentrouter/README.md) · [Changelog](CHANGELOG.md)
+[AgentRouter WASM affinity + native patch](agentinfer/agentrouter/README.md) ·
+[InferRSI workbench](docs/en/reference/inferrsi.md) · [Changelog](CHANGELOG.md)
 
 ## Requirements
 
