@@ -5,8 +5,8 @@
 
 ## 来源与目录
 
-- 来源版本：[`e0ca06cb99e6087292279fab13c56f602db209ec`][source-revision]（`main`，于 2026-10-20 导入）。
-- 全部 600 个跟踪文件在 `inferrsi/` 下保留原始内容和相对路径，包括隐藏文件、源码、测试、文档、
+- 来源版本：[`76384cfb2c2af08eaa90753a18a45557ceed7ce0`][source-revision]（`main`，于 2026-10-21 同步）。
+- 全部 536 个跟踪文件在 `inferrsi/` 下保留原始内容和相对路径，包括隐藏文件、源码、测试、文档、
   配方、基准测试、证据、打包技能及许可证声明。
 - `inferrsi` 发行包使用 [`inferrsi/pyproject.toml`](../../../inferrsi/pyproject.toml)，
   与仓根目录的 `agentinfer` 发行包分别安装。
@@ -36,4 +36,4 @@ CPU 测试验证工作台行为；加速器实验和性能结论需要各自的�
 [操作指南](../../../inferrsi/docs/operations.md)及
 [贡献指南](../../../inferrsi/docs/contributing.md)开始。
 
-[source-revision]: https://github.com/InferMatrixLab/InferRSI/tree/e0ca06cb99e6087292279fab13c56f602db209ec
+[source-revision]: https://github.com/InferMatrixLab/InferRSI/tree/76384cfb2c2af08eaa90753a18a45557ceed7ce0

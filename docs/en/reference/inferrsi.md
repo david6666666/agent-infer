@@ -5,8 +5,8 @@
 
 ## Provenance and layout
 
-- Source revision: [`e0ca06cb99e6087292279fab13c56f602db209ec`][source-revision] (`main`, imported on 2026-10-20).
-- All 600 tracked files retain their original contents and paths beneath `inferrsi/`, including dotfiles,
+- Source revision: [`76384cfb2c2af08eaa90753a18a45557ceed7ce0`][source-revision] (`main`, synced on 2026-10-21).
+- All 536 tracked files retain their original contents and paths beneath `inferrsi/`, including dotfiles,
   source code, tests, documentation, recipes, benchmarks, evidence, packaged skills and license notices.
 - The `inferrsi` distribution uses [`inferrsi/pyproject.toml`](../../../inferrsi/pyproject.toml).
   Install it separately from the root `agentinfer` distribution.
@@ -36,4 +36,4 @@ Start with the [InferRSI README](../../../inferrsi/README.md),
 [operation guide](../../../inferrsi/docs/operations.md), and
 [contributor guide](../../../inferrsi/docs/contributing.md).
 
-[source-revision]: https://github.com/InferMatrixLab/InferRSI/tree/e0ca06cb99e6087292279fab13c56f602db209ec
+[source-revision]: https://github.com/InferMatrixLab/InferRSI/tree/76384cfb2c2af08eaa90753a18a45557ceed7ce0
